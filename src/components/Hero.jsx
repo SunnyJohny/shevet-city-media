@@ -1,3 +1,4 @@
+// src/components/Hero.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { BsList, BsX } from "react-icons/bs";
 import { Link as ScrollLink } from "react-scroll";
@@ -95,7 +96,8 @@ const NAV_DATA = [
     label: "News",
     to: "news",
     children: [
-      { label: "Headlines", to: "news-headlines" },
+      // first child goes to the main news section
+      { label: "Headlines", to: "news" },
       { label: "Archives", to: "news-archives" },
       { label: "Inspiration", to: "news-inspiration" },
     ],
@@ -117,9 +119,13 @@ const Hero = () => {
 
   // track which desktop dropdown is open (by label) for keyboard/ARIA support
   const [openDropdown, setOpenDropdown] = useState(null);
+  // pinnedDropdown holds the label of a dropdown opened by click (so it stays open)
+  const [pinnedDropdown, setPinnedDropdown] = useState(null);
   // track expanded parents in mobile menu
   const [mobileExpanded, setMobileExpanded] = useState({});
   const desktopNavRef = useRef(null);
+  // short timeout used to avoid flicker when moving cursor to submenu
+  const closeTimeout = useRef(null);
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -145,15 +151,19 @@ const Hero = () => {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // close open dropdowns on esc / outside click
+  // close open dropdowns on esc / outside click — also clear pinnedDropdown
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") setOpenDropdown(null);
+      if (e.key === "Escape") {
+        setOpenDropdown(null);
+        setPinnedDropdown(null);
+      }
     };
     const onClick = (e) => {
       if (!desktopNavRef.current) return;
       if (!desktopNavRef.current.contains(e.target)) {
         setOpenDropdown(null);
+        setPinnedDropdown(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -249,6 +259,25 @@ const Hero = () => {
 
   const toggleMobileParent = (label) =>
     setMobileExpanded((p) => ({ ...p, [label]: !p[label] }));
+
+  // Helper to open a dropdown by label (clears any close timeout)
+  const openDropdownFor = (label) => {
+    if (closeTimeout.current) {
+      clearTimeout(closeTimeout.current);
+      closeTimeout.current = null;
+    }
+    setOpenDropdown(label);
+  };
+
+  // Helper to schedule close (short delay) unless pinned
+  const scheduleCloseDropdown = (label) => {
+    if (pinnedDropdown === label) return;
+    if (closeTimeout.current) clearTimeout(closeTimeout.current);
+    closeTimeout.current = setTimeout(() => {
+      setOpenDropdown((prev) => (prev === label ? null : prev));
+      closeTimeout.current = null;
+    }, 150); // small delay to allow pointer transit
+  };
 
   return (
     <header id="home" className="relative">
@@ -358,17 +387,25 @@ const Hero = () => {
                 return (
                   <div
                     key={item.label}
-                    className="relative group"
-                    onMouseEnter={() => setOpenDropdown(item.label)}
-                    onMouseLeave={() => setOpenDropdown(null)}
+                    className="relative"
+                    // open on hover (mouseenter) and schedule close on mouseleave
+                    onMouseEnter={() => openDropdownFor(item.label)}
+                    onMouseLeave={() => scheduleCloseDropdown(item.label)}
                   >
                     <button
                       type="button"
                       aria-haspopup="true"
                       aria-expanded={openDropdown === item.label}
-                      onClick={() =>
-                        setOpenDropdown((p) => (p === item.label ? null : item.label))
-                      }
+                      onClick={() => {
+                        // toggle pinned state on click: pin (so it stays open) or unpin & close
+                        if (pinnedDropdown === item.label) {
+                          setPinnedDropdown(null);
+                          setOpenDropdown(null);
+                        } else {
+                          setPinnedDropdown(item.label);
+                          setOpenDropdown(item.label);
+                        }
+                      }}
                       className="flex items-center gap-2 cursor-pointer hover:text-[#F29A00]"
                     >
                       <span>{item.label}</span>
@@ -389,6 +426,15 @@ const Hero = () => {
                         "absolute left-0 mt-2 w-56 bg-white border border-[#f1e0f1] shadow-lg rounded-md overflow-hidden z-50",
                         openDropdown === item.label ? "block" : "hidden",
                       ].join(" ")}
+                      // keep the submenu open while the pointer is inside it
+                      onMouseEnter={() => {
+                        if (closeTimeout.current) {
+                          clearTimeout(closeTimeout.current);
+                          closeTimeout.current = null;
+                        }
+                        setOpenDropdown(item.label);
+                      }}
+                      onMouseLeave={() => scheduleCloseDropdown(item.label)}
                     >
                       <ul className="flex flex-col">
                         {item.children.map((c) => (
@@ -400,7 +446,11 @@ const Hero = () => {
                               offset={-120}
                               duration={500}
                               className="block px-4 py-2 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
-                              onClick={() => setOpenDropdown(null)}
+                              onClick={() => {
+                                // clicking a submenu item should close dropdowns (and unpin)
+                                setOpenDropdown(null);
+                                setPinnedDropdown(null);
+                              }}
                             >
                               {c.label}
                             </ScrollLink>
