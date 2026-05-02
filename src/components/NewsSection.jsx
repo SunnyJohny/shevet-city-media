@@ -365,6 +365,11 @@ const NewsSection = ({
     }
   };
 
+  // Color constants for consistency with site
+  const primaryColor = "#5A005A"; // Deep Purple
+  const accentColor = "#F29A00"; // Golden Orange
+  const accentHover = "#FFA500";
+
   return (
     <section
       id="news"
@@ -379,10 +384,16 @@ const NewsSection = ({
           className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10"
         >
           <div>
-            <p className="text-xs font-semibold tracking-[0.3em] uppercase text-blue-700 mb-2">
+            <p
+              className="text-xs font-semibold tracking-[0.3em] uppercase mb-2"
+              style={{ color: primaryColor }}
+            >
               News & Updates
             </p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 leading-tight">
+            <h2
+              className="text-3xl md:text-4xl font-extrabold leading-tight"
+              style={{ color: primaryColor }}
+            >
               {title}
             </h2>
             <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl">
@@ -408,7 +419,13 @@ const NewsSection = ({
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-yellow-400 text-blue-900 hover:bg-yellow-300 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-semibold transition"
+                style={{
+                  background: accentColor,
+                  color: primaryColor,
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = accentHover)}
+                onMouseOut={(e) => (e.currentTarget.style.background = accentColor)}
               >
                 <BsPlusCircle className="text-base" />
                 Add News
@@ -423,12 +440,24 @@ const NewsSection = ({
                     key={cat}
                     type="button"
                     onClick={() => setActiveCat(cat)}
-                    className={[
-                      "px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition",
+                    className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition"
+                    style={
                       active
-                        ? "bg-blue-900 text-white border-blue-900"
-                        : "bg-white text-blue-900 border-slate-200 hover:border-blue-300 hover:bg-blue-50",
-                    ].join(" ")}
+                        ? { background: primaryColor, color: "#fff", borderColor: primaryColor }
+                        : { background: "#fff", color: primaryColor, borderColor: "#e6e6e6" }
+                    }
+                    onMouseOver={(e) => {
+                      if (!active) {
+                        e.currentTarget.style.borderColor = accentColor;
+                        e.currentTarget.style.background = "#fff7ec";
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (!active) {
+                        e.currentTarget.style.borderColor = "#e6e6e6";
+                        e.currentTarget.style.background = "#fff";
+                      }
+                    }}
                   >
                     {cat}
                   </button>
@@ -450,21 +479,36 @@ const NewsSection = ({
               variants={cardVariants}
               className="group relative overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-100 hover:shadow-xl transition-shadow duration-500"
             >
-              <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-blue-900 via-blue-600 to-yellow-400" />
+              <div
+                className="absolute left-0 top-0 h-1 w-full"
+                style={{
+                  background: `linear-gradient(90deg, ${primaryColor}, ${accentColor})`,
+                }}
+              />
 
               <div className="p-5 pb-5 flex flex-col h-full">
                 <div className="flex items-center justify-end mb-3">
-                  <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-100">
+                  <span
+                    className="text-[11px] font-semibold px-3 py-1 rounded-full border"
+                    style={{
+                      background: "#f7eef7",
+                      color: primaryColor,
+                      borderColor: "#ead9ea",
+                    }}
+                  >
                     {item.category || "General"}
                   </span>
                 </div>
 
-                <h3 className="text-lg md:text-xl font-bold text-blue-900 group-hover:text-blue-800 transition-colors">
+                <h3
+                  className="text-lg md:text-xl font-bold group-hover:transition-colors"
+                  style={{ color: primaryColor }}
+                >
                   {item.title}
                 </h3>
 
                 {!!item.highlight && (
-                  <p className="mt-2 text-sm font-medium text-yellow-600">
+                  <p className="mt-2 text-sm font-medium" style={{ color: accentColor }}>
                     {item.highlight}
                   </p>
                 )}
@@ -482,10 +526,25 @@ const NewsSection = ({
                     <button
                       type="button"
                       onClick={() => setOpenItem(item)}
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800 hover:text-blue-900"
+                      className="inline-flex items-center gap-2 text-sm font-semibold"
+                      style={{ color: primaryColor }}
                     >
                       Read more
-                      <span className="w-6 h-6 rounded-full border border-blue-200 flex items-center justify-center hover:bg-blue-800 hover:text-white transition-colors">
+                      <span
+                        className="w-6 h-6 rounded-full border flex items-center justify-center transition-colors"
+                        style={{
+                          borderColor: "#f0e0c6",
+                          color: primaryColor,
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = accentColor;
+                          e.currentTarget.style.color = "#fff";
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.color = primaryColor;
+                        }}
+                      >
                         <BsArrowRight className="text-xs" />
                       </span>
                     </button>
@@ -495,9 +554,10 @@ const NewsSection = ({
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
-                          className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-blue-900 border border-slate-200 shadow-sm flex items-center justify-center"
+                          className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-inherit border border-slate-200 shadow-sm flex items-center justify-center"
                           aria-label="Edit"
                           title="Edit"
+                          style={{ color: primaryColor }}
                         >
                           <BsPencilSquare />
                         </button>
@@ -517,7 +577,12 @@ const NewsSection = ({
                 </div>
               </div>
 
-              <div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-blue-900/5 via-transparent to-yellow-400/10" />
+              <div
+                className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{
+                  background: `linear-gradient(135deg, rgba(90,0,90,0.03), rgba(242,154,0,0.06))`,
+                }}
+              />
             </motion.article>
           ))}
         </motion.div>
@@ -556,7 +621,7 @@ const NewsSection = ({
                     {openItem.category || "General"} •{" "}
                     {formatDate(openItem.createdAt, openItem.createdAtMs)}
                   </p>
-                  <p className="text-base font-extrabold text-blue-900 truncate">
+                  <p className="text-base font-extrabold truncate" style={{ color: primaryColor }}>
                     {openItem.title}
                   </p>
                 </div>
@@ -574,7 +639,7 @@ const NewsSection = ({
               {/* scrollable content */}
               <div className="p-5 overflow-y-auto flex-1 min-h-0">
                 {!!openItem.highlight && (
-                  <p className="text-sm font-semibold text-yellow-600">
+                  <p className="text-sm font-semibold" style={{ color: accentColor }}>
                     {openItem.highlight}
                   </p>
                 )}
@@ -588,7 +653,10 @@ const NewsSection = ({
                 <button
                   type="button"
                   onClick={() => setOpenItem(null)}
-                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-blue-900 text-white hover:bg-blue-800"
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition"
+                  style={{ background: primaryColor, color: "#fff" }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = "#6A006A")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = primaryColor)}
                 >
                   Close <BsX />
                 </button>
@@ -623,7 +691,7 @@ const NewsSection = ({
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                     Admin
                   </p>
-                  <p className="text-base font-extrabold text-blue-900">Add News</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Add News</p>
                 </div>
 
                 <button
@@ -693,11 +761,10 @@ const NewsSection = ({
                   type="button"
                   onClick={handleAddNews}
                   disabled={savingAdd}
-                  className={[
-                    "w-full py-3 rounded-lg font-semibold",
-                    "bg-yellow-400 text-blue-900 hover:bg-yellow-300 transition",
-                    savingAdd ? "opacity-60 cursor-not-allowed" : "",
-                  ].join(" ")}
+                  className="w-full py-3 rounded-lg font-semibold transition"
+                  style={{ background: accentColor, color: primaryColor }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = accentHover)}
+                  onMouseOut={(e) => (e.currentTarget.style.background = accentColor)}
                 >
                   {savingAdd ? "Publishing..." : "Publish News"}
                 </button>
@@ -732,7 +799,7 @@ const NewsSection = ({
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                     Admin
                   </p>
-                  <p className="text-base font-extrabold text-blue-900">Edit News</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Edit News</p>
                 </div>
 
                 <button
@@ -799,11 +866,8 @@ const NewsSection = ({
                   type="button"
                   onClick={handleEditSave}
                   disabled={savingEdit}
-                  className={[
-                    "w-full py-3 rounded-lg font-semibold",
-                    "bg-blue-900 text-white hover:bg-blue-800 transition",
-                    savingEdit ? "opacity-60 cursor-not-allowed" : "",
-                  ].join(" ")}
+                  className="w-full py-3 rounded-lg font-semibold transition"
+                  style={{ background: primaryColor, color: "#fff" }}
                 >
                   {savingEdit ? "Saving..." : "Save Changes"}
                 </button>
@@ -838,7 +902,7 @@ const NewsSection = ({
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                     Admin
                   </p>
-                  <p className="text-base font-extrabold text-blue-900">Delete News</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Delete News</p>
                 </div>
 
                 <button
@@ -870,10 +934,8 @@ const NewsSection = ({
                     type="button"
                     onClick={handleDeleteConfirm}
                     disabled={deleting}
-                    className={[
-                      "flex-1 py-2 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-500",
-                      deleting ? "opacity-60 cursor-not-allowed" : "",
-                    ].join(" ")}
+                    className="flex-1 py-2 rounded-lg font-semibold text-white"
+                    style={{ background: "#dc2626" }}
                   >
                     {deleting ? "Deleting..." : "Delete"}
                   </button>

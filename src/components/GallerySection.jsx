@@ -369,6 +369,13 @@ const GallerySection = ({ title, subtitle }) => {
     }
   };
 
+  // Color constants used inline for consistency:
+  // Primary deep purple: #5A005A
+  // Accent golden orange: #F29A00 (hover #FFA500)
+  const primaryColor = "#5A005A";
+  const accentColor = "#F29A00";
+  const accentHover = "#FFA500";
+
   return (
     <section id="gallery" className="bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16">
       <div className="max-w-6xl mx-auto">
@@ -381,12 +388,12 @@ const GallerySection = ({ title, subtitle }) => {
           className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10"
         >
           <div>
-            <p className="text-xs font-semibold tracking-[0.3em] uppercase text-blue-700 mb-2 inline-flex items-center gap-2">
+            <p className="text-xs font-semibold tracking-[0.3em] uppercase mb-2 inline-flex items-center gap-2" style={{ color: primaryColor }}>
               <BsImages className="text-base" />
               Gallery
             </p>
 
-            <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 leading-tight">
+            <h2 className="text-3xl md:text-4xl font-extrabold leading-tight" style={{ color: primaryColor }}>
               {title || "Moments from SHEVET-CITY Media"}
             </h2>
 
@@ -412,7 +419,13 @@ const GallerySection = ({ title, subtitle }) => {
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-yellow-400 text-blue-900 hover:bg-yellow-300 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-semibold transition"
+                style={{
+                  background: accentColor,
+                  color: primaryColor,
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = accentHover)}
+                onMouseOut={(e) => (e.currentTarget.style.background = accentColor)}
               >
                 <BsPlusCircle className="text-base" />
                 Add to Gallery
@@ -428,12 +441,24 @@ const GallerySection = ({ title, subtitle }) => {
                     key={cat}
                     type="button"
                     onClick={() => setActiveCat(cat)}
-                    className={[
-                      "px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition",
+                    className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition"
+                    style={
                       active
-                        ? "bg-blue-900 text-white border-blue-900"
-                        : "bg-white text-blue-900 border-slate-200 hover:border-blue-300 hover:bg-blue-50",
-                    ].join(" ")}
+                        ? { background: primaryColor, color: "#fff", borderColor: primaryColor }
+                        : { background: "#fff", color: primaryColor, borderColor: "#e6e6e6" }
+                    }
+                    onMouseOver={(e) => {
+                      if (!active) {
+                        e.currentTarget.style.borderColor = accentColor;
+                        e.currentTarget.style.background = "#fff7ec";
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (!active) {
+                        e.currentTarget.style.borderColor = "#e6e6e6";
+                        e.currentTarget.style.background = "#fff";
+                      }
+                    }}
                   >
                     {cat}
                   </button>
@@ -468,14 +493,26 @@ const GallerySection = ({ title, subtitle }) => {
                   loading="lazy"
                   className="w-full h-40 sm:h-48 md:h-56 lg:h-52 xl:h-56 object-cover group-hover:scale-[1.03] transition-transform duration-500"
                 />
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-yellow-400/10 via-transparent to-blue-900/10" />
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: `linear-gradient(to bottom right, rgba(242,154,0,0.07), rgba(0,0,0,0) 30%, rgba(90,0,90,0.08))`,
+                  }}
+                />
               </button>
 
               {/* Text area UNDER the image */}
               <div className="p-3 sm:p-4 flex-1 flex flex-col">
                 {/* meta row */}
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] md:text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-900 border border-blue-100">
+                  <span
+                    className="text-[10px] md:text-xs font-semibold px-2.5 py-1 rounded-full"
+                    style={{
+                      background: "#f7eef7",
+                      color: primaryColor,
+                      border: "1px solid #ead9ea",
+                    }}
+                  >
                     {img.category || "Media"}
                   </span>
                   <span className="text-[10px] text-slate-500 line-clamp-1">
@@ -484,7 +521,7 @@ const GallerySection = ({ title, subtitle }) => {
                 </div>
 
                 {/* title */}
-                <p className="mt-2 text-sm md:text-base font-extrabold text-blue-900 line-clamp-1">
+                <p className="mt-2 text-sm md:text-base font-extrabold line-clamp-1" style={{ color: primaryColor }}>
                   {img.alt || "SHEVET-CITY photo"}
                 </p>
 
@@ -503,9 +540,10 @@ const GallerySection = ({ title, subtitle }) => {
                     <button
                       type="button"
                       onClick={() => openEdit(img)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-200 text-blue-900 font-semibold text-xs hover:bg-slate-50"
+                      className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-200 font-semibold text-xs hover:bg-slate-50"
                       aria-label="Edit"
                       title="Edit"
+                      style={{ color: primaryColor }}
                     >
                       <BsPencilSquare /> Edit
                     </button>
@@ -513,11 +551,11 @@ const GallerySection = ({ title, subtitle }) => {
                     <button
                       type="button"
                       onClick={() => openDelete(img)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-200 text-red-600 font-semibold text-xs hover:bg-red-50"
+                      className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-slate-200 font-semibold text-xs hover:bg-red-50"
                       aria-label="Delete"
                       title="Delete"
                     >
-                      <BsTrash /> Delete
+                      <BsTrash style={{ color: "#dc2626" }} /> Delete
                     </button>
                   </div>
                 )}
@@ -533,7 +571,10 @@ const GallerySection = ({ title, subtitle }) => {
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-blue-900 text-white text-sm md:text-base font-semibold hover:bg-blue-800 transition shadow-sm"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-full text-sm md:text-base font-semibold transition shadow-sm"
+                style={{ background: primaryColor, color: "#fff" }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "#6A006A")}
+                onMouseOut={(e) => (e.currentTarget.style.background = primaryColor)}
               >
                 More
               </button>
@@ -543,7 +584,14 @@ const GallerySection = ({ title, subtitle }) => {
               <button
                 type="button"
                 onClick={handleShowLess}
-                className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-blue-900 text-blue-900 bg-white text-sm md:text-base font-semibold hover:bg-blue-50 transition shadow-sm"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-full text-sm md:text-base font-semibold transition shadow-sm"
+                style={{
+                  background: "#fff",
+                  color: primaryColor,
+                  border: `1px solid ${primaryColor}`,
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "#fff7ec")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "#fff")}
               >
                 Show Less
               </button>
@@ -576,7 +624,7 @@ const GallerySection = ({ title, subtitle }) => {
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold text-blue-900">Add to Gallery</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Add to Gallery</p>
                 </div>
 
                 <button type="button" onClick={closeAdd} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
@@ -612,7 +660,7 @@ const GallerySection = ({ title, subtitle }) => {
                   </select>
                 </div>
 
-                <button type="button" onClick={handleUpload} disabled={uploading} className={["w-full py-3 rounded-lg font-semibold", "bg-yellow-400 text-blue-900 hover:bg-yellow-300 transition", uploading ? "opacity-60 cursor-not-allowed" : ""].join(" ")}>
+                <button type="button" onClick={handleUpload} disabled={uploading} className="w-full py-3 rounded-lg font-semibold transition" style={{ background: accentColor, color: primaryColor }}>
                   {uploading ? "Uploading..." : "Upload Photo"}
                 </button>
               </div>
@@ -629,7 +677,7 @@ const GallerySection = ({ title, subtitle }) => {
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold text-blue-900">Edit Gallery Item</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Edit Gallery Item</p>
                 </div>
 
                 <button type="button" onClick={closeEdit} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
@@ -655,7 +703,7 @@ const GallerySection = ({ title, subtitle }) => {
                   </select>
                 </div>
 
-                <button type="button" onClick={handleEditSave} disabled={editing} className={["w-full py-3 rounded-lg font-semibold", "bg-blue-900 text-white hover:bg-blue-800 transition", editing ? "opacity-60 cursor-not-allowed" : ""].join(" ")}>
+                <button type="button" onClick={handleEditSave} disabled={editing} className="w-full py-3 rounded-lg font-semibold transition" style={{ background: primaryColor, color: "#fff" }}>
                   {editing ? "Saving..." : "Save Changes"}
                 </button>
               </div>
@@ -672,7 +720,7 @@ const GallerySection = ({ title, subtitle }) => {
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold text-blue-900">Delete Photo</p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Delete Photo</p>
                 </div>
 
                 <button type="button" onClick={closeDelete} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
@@ -686,7 +734,7 @@ const GallerySection = ({ title, subtitle }) => {
                 <div className="flex gap-3">
                   <button type="button" onClick={closeDelete} disabled={deleting} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50">Cancel</button>
 
-                  <button type="button" onClick={handleDeleteConfirm} disabled={deleting} className={["flex-1 py-2 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-500", deleting ? "opacity-60 cursor-not-allowed" : ""].join(" ")}>
+                  <button type="button" onClick={handleDeleteConfirm} disabled={deleting} className="flex-1 py-2 rounded-lg font-semibold text-white" style={{ background: "#dc2626" }}>
                     {deleting ? "Deleting..." : "Delete"}
                   </button>
                 </div>
@@ -704,7 +752,7 @@ const GallerySection = ({ title, subtitle }) => {
               <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-100">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">{activeItem.category || "Media"}</p>
-                  <p className="text-sm sm:text-base font-bold text-blue-900 truncate">{activeItem.alt || "SHEVET-CITY photo"}</p>
+                  <p className="text-sm sm:text-base font-bold truncate" style={{ color: primaryColor }}>{activeItem.alt || "SHEVET-CITY photo"}</p>
                 </div>
 
                 <button type="button" onClick={closeModal} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
@@ -717,11 +765,11 @@ const GallerySection = ({ title, subtitle }) => {
 
                 {filtered.length > 1 && (
                   <>
-                    <button type="button" onClick={goPrev} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-blue-900 shadow flex items-center justify-center" aria-label="Previous image">
-                      <BsChevronLeft className="text-xl" />
+                    <button type="button" onClick={goPrev} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center" aria-label="Previous image">
+                      <BsChevronLeft className="text-xl" style={{ color: primaryColor }} />
                     </button>
-                    <button type="button" onClick={goNext} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-blue-900 shadow flex items-center justify-center" aria-label="Next image">
-                      <BsChevronRight className="text-xl" />
+                    <button type="button" onClick={goNext} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center" aria-label="Next image">
+                      <BsChevronRight className="text-xl" style={{ color: primaryColor }} />
                     </button>
                   </>
                 )}
@@ -740,7 +788,7 @@ const GallerySection = ({ title, subtitle }) => {
               <div className="px-4 sm:px-5 py-3 border-t border-slate-100 flex items-center justify-between">
                 <p className="text-xs text-slate-500">{activeIndex !== null ? activeIndex + 1 : 0} / {filtered.length}</p>
 
-                <button type="button" onClick={closeModal} className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-blue-900 text-white hover:bg-blue-800">
+                <button type="button" onClick={closeModal} className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full" style={{ background: primaryColor, color: "#fff" }}>
                   Close <BsX />
                 </button>
               </div>

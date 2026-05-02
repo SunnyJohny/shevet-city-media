@@ -103,10 +103,6 @@ const NAV_DATA = [
 
   { label: "Shop", to: "shop", children: [{ label: "Goods", to: "shop-goods" }] },
 
-  // { label: "Art", to: "art" },
-  // { label: "Shows", to: "shows" },
-  // { label: "Podcasts", to: "podcasts" },
-  // { label: "Editorials", to: "editorials" },
   { label: "Gallery", to: "gallery" },
   { label: "About", to: "about" },
   { label: "Contact", to: "contact" },
@@ -271,14 +267,14 @@ const Hero = () => {
           isSticky ? "fixed top-0 left-0 right-0" : "relative",
         ].join(" ")}
       >
-        <div className="w-full bg-blue-900 text-white text-xs md:text-sm shadow-sm">
+        <div className="w-full bg-[#5A005A] text-white text-xs md:text-sm shadow-sm">
           <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-2 py-2 px-4">
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <span className="font-semibold tracking-wide uppercase">
                 Questions?
               </span>
-              <span>(+234) 803 335 3059</span>
-              <span>info@shevecitymedia.com</span>
+             <span>(+234) 906 906 0610</span>
+              <span>www.shevecitymedia.com</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
@@ -304,13 +300,14 @@ const Hero = () => {
                 </>
               ) : (
                 <>
+
                   <span className="bg-white/10 px-3 py-1 rounded-full text-[11px] md:text-xs font-medium">
                     Not logged in
                   </span>
 
                   <button
                     onClick={() => openAuth("signin")}
-                    className="bg-yellow-400 text-blue-900 text-xs font-semibold tracking-wide px-4 py-1 rounded-sm uppercase hover:bg-yellow-300 transition"
+                    className="bg-[#F29A00] text-[#5A005A] text-xs font-semibold tracking-wide px-4 py-1 rounded-sm uppercase hover:bg-[#FFA500] transition"
                     type="button"
                   >
                     Get Started / Login
@@ -336,7 +333,7 @@ const Hero = () => {
             {/* Desktop nav with dropdowns */}
             <nav
               ref={desktopNavRef}
-              className="hidden md:flex items-center gap-6 text-sm font-semibold text-blue-900 relative"
+              className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#5A005A] relative"
               aria-label="Primary"
             >
               {NAV_DATA.map((item) => {
@@ -350,7 +347,7 @@ const Hero = () => {
                       smooth={true}
                       offset={-120}
                       duration={500}
-                      className="cursor-pointer hover:text-yellow-400"
+                      className="cursor-pointer hover:text-[#F29A00]"
                     >
                       {item.label}
                     </ScrollLink>
@@ -372,7 +369,7 @@ const Hero = () => {
                       onClick={() =>
                         setOpenDropdown((p) => (p === item.label ? null : item.label))
                       }
-                      className="flex items-center gap-2 cursor-pointer hover:text-yellow-400"
+                      className="flex items-center gap-2 cursor-pointer hover:text-[#F29A00]"
                     >
                       <span>{item.label}</span>
                       <svg
@@ -389,7 +386,7 @@ const Hero = () => {
                       role="menu"
                       aria-label={`${item.label} submenu`}
                       className={[
-                        "absolute left-0 mt-2 w-56 bg-white border border-slate-100 shadow-lg rounded-md overflow-hidden z-50",
+                        "absolute left-0 mt-2 w-56 bg-white border border-[#f1e0f1] shadow-lg rounded-md overflow-hidden z-50",
                         openDropdown === item.label ? "block" : "hidden",
                       ].join(" ")}
                     >
@@ -402,7 +399,7 @@ const Hero = () => {
                               smooth={true}
                               offset={-120}
                               duration={500}
-                              className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-900 cursor-pointer"
+                              className="block px-4 py-2 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
                               onClick={() => setOpenDropdown(null)}
                             >
                               {c.label}
@@ -434,7 +431,7 @@ const Hero = () => {
               ) : (
                 <button
                   onClick={() => openAuth("signin")}
-                  className="text-sm font-semibold text-blue-900 hover:text-yellow-500 transition"
+                  className="text-sm font-semibold text-[#5A005A] hover:text-[#F29A00] transition"
                   type="button"
                 >
                   Sign in
@@ -444,7 +441,7 @@ const Hero = () => {
 
             {/* Mobile toggle */}
             <button
-              className="md:hidden text-blue-900 text-2xl"
+              className="md:hidden text-[#5A005A] text-2xl"
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-label="Toggle navigation"
               type="button"
@@ -456,7 +453,7 @@ const Hero = () => {
           {/* Mobile menu (full width) */}
           {mobileOpen && (
             <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-100">
-              <nav className="flex flex-col py-3 px-4 text-sm font-semibold text-blue-900">
+              <nav className="flex flex-col py-3 px-4 text-sm font-semibold text-[#5A005A]">
                 {NAV_DATA.map((item) => {
                   const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                   if (!hasChildren) {
@@ -469,7 +466,7 @@ const Hero = () => {
                         offset={-120}
                         duration={500}
                         onClick={closeMobile}
-                        className="py-2 border-b border-gray-100 cursor-pointer hover:text-yellow-400"
+                        className="py-2 border-b border-gray-100 cursor-pointer hover:text-[#F29A00]"
                       >
                         {item.label}
                       </ScrollLink>
@@ -481,7 +478,7 @@ const Hero = () => {
                       <button
                         type="button"
                         onClick={() => toggleMobileParent(item.label)}
-                        className="w-full text-left py-2 flex items-center justify-between gap-2 hover:text-yellow-400"
+                        className="w-full text-left py-2 flex items-center justify-between gap-2 hover:text-[#F29A00]"
                         aria-expanded={!!mobileExpanded[item.label]}
                         aria-controls={`mobile-${item.label}`}
                       >
@@ -502,7 +499,7 @@ const Hero = () => {
                               offset={-120}
                               duration={500}
                               onClick={closeMobile}
-                              className="block py-2 text-sm text-slate-700 hover:text-blue-900 cursor-pointer"
+                              className="block py-2 text-sm text-slate-700 hover:text-[#5A005A] cursor-pointer"
                             >
                               {c.label}
                             </ScrollLink>
@@ -542,7 +539,7 @@ const Hero = () => {
                       openAuth("signin");
                       closeMobile();
                     }}
-                    className="mt-2 w-full bg-yellow-400 text-blue-900 py-2 rounded text-xs font-semibold uppercase hover:bg-yellow-300 transition"
+                    className="mt-2 w-full bg-[#F29A00] text-[#5A005A] py-2 rounded text-xs font-semibold uppercase hover:bg-[#FFA500] transition"
                     type="button"
                   >
                     Get Started / Login
@@ -598,7 +595,7 @@ const Hero = () => {
                 SHEVET-CITY
               </h1>
 
-              <p className="mt-2 text-yellow-300 text-base md:text-xl font-semibold italic tracking-wide">
+              <p className="mt-2 text-[#F29A00] text-base md:text-xl font-semibold italic tracking-wide">
                 Storytelling that moves people
               </p>
             </div>
@@ -611,7 +608,7 @@ const Hero = () => {
                 className="inline-block"
               >
                 <button
-                  className="px-6 py-3 bg-yellow-400 text-blue-900 font-semibold rounded-full hover:bg-yellow-300 transition shadow-lg"
+                  className="px-6 py-3 bg-[#F29A00] text-[#5A005A] font-semibold rounded-full hover:bg-[#FFA500] transition shadow-lg"
                   type="button"
                 >
                   Enquire
@@ -625,7 +622,7 @@ const Hero = () => {
           <div className="max-w-6xl mx-auto px-4 pb-8 md:pb-10">
             <div className="bg-white/90 backdrop-blur rounded-xl border border-white/60 shadow-lg overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-[11px] font-extrabold tracking-[0.25em] uppercase text-blue-900">
+                <span className="text-[11px] font-extrabold tracking-[0.25em] uppercase text-[#5A005A]">
                   Latest
                 </span>
 

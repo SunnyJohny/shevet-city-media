@@ -13,11 +13,6 @@ import {
   BsCalendarEvent,
   BsBrush,
   BsSearch,
-  BsBag,
-  BsPeople,
-  BsTree,
-  BsHouse,
-  BsCart3,
 } from "react-icons/bs";
 import { Link as ScrollLink } from "react-scroll";
 
@@ -114,6 +109,16 @@ const AboutUs = ({
     return null;
   }, []);
 
+  // Branding colours (consistent across site)
+  const primaryColor = "#5A005A"; // Deep Purple
+  const primaryDark = "#6A006A";
+  const accentColor = "#F29A00"; // Golden Orange
+  const accentHover = "#FFA500";
+
+  // small helper styles
+  const pillLightBg = "#F7EEF7";
+  const pillLightBorder = "#EAD9EA";
+
   return (
     <section id="about" className="bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16">
       <div className="max-w-6xl mx-auto">
@@ -125,14 +130,20 @@ const AboutUs = ({
           viewport={{ once: true, amount: 0.2 }}
           className="mb-10"
         >
-          <p className="text-xs font-semibold tracking-[0.3em] uppercase text-blue-700 mb-2">
+          <p
+            className="text-xs font-semibold tracking-[0.3em] uppercase mb-2"
+            style={{ color: primaryColor }}
+          >
             About us
           </p>
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
             {breadcrumbs.map((b, i) => (
               <span key={b} className="inline-flex items-center gap-2">
-                <span className={i === breadcrumbs.length - 1 ? "text-blue-900 font-semibold" : ""}>
+                <span
+                  className={i === breadcrumbs.length - 1 ? "font-semibold" : ""}
+                  style={i === breadcrumbs.length - 1 ? { color: primaryColor } : undefined}
+                >
                   {b}
                 </span>
                 {i !== breadcrumbs.length - 1 && <span className="text-slate-300">/</span>}
@@ -140,7 +151,10 @@ const AboutUs = ({
             ))}
           </div>
 
-          <h2 className="mt-4 text-3xl md:text-4xl font-extrabold text-blue-900 leading-tight">
+          <h2
+            className="mt-4 text-3xl md:text-4xl font-extrabold leading-tight"
+            style={{ color: primaryColor }}
+          >
             Who we are
           </h2>
         </motion.div>
@@ -154,7 +168,10 @@ const AboutUs = ({
           className="grid gap-6 md:grid-cols-5 items-start mb-10"
         >
           {/* Left: Image (2/5) */}
-          <motion.div variants={itemVar} className="md:col-span-2 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <motion.div
+            variants={itemVar}
+            className="md:col-span-2 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+          >
             <div className="relative">
               {ownerPic ? (
                 <img
@@ -186,13 +203,21 @@ const AboutUs = ({
           </motion.div>
 
           {/* Right: Write-up (3/5) */}
-          <motion.div variants={itemVar} className="md:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+          <motion.div
+            variants={itemVar}
+            className="md:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8"
+          >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-900 flex items-center justify-center border border-blue-100">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center border"
+                style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}
+              >
                 <BsStars className="text-xl" />
               </div>
               <div>
-                <h3 className="text-xl md:text-2xl font-extrabold text-blue-900">About {organizationName}</h3>
+                <h3 className="text-xl md:text-2xl font-extrabold" style={{ color: primaryColor }}>
+                  About {organizationName}
+                </h3>
                 <p className="text-sm text-slate-600 mt-1">{tagline}</p>
               </div>
             </div>
@@ -210,13 +235,22 @@ const AboutUs = ({
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-blue-50 text-blue-900 border border-blue-100">
+              <span
+                className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border"
+                style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}
+              >
                 Multimedia Production
               </span>
-              <span className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-yellow-50 text-yellow-800 border border-yellow-100">
+              <span
+                className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border"
+                style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}
+              >
                 Investigative Reporting
               </span>
-              <span className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-slate-50 text-slate-700 border border-slate-200">
+              <span
+                className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border"
+                style={{ background: "#F3F5F7", color: "#374151", borderColor: "#E6E9EE" }}
+              >
                 Community Engagement
               </span>
             </div>
@@ -226,16 +260,26 @@ const AboutUs = ({
         {/* 3-column layout: logo + core values / mission / vision */}
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Logo card */}
-          <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="bg-slate-50 rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center">
+          <motion.div
+            variants={itemVar}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.2 }}
+            className="bg-slate-50 rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col items-center text-center"
+          >
             <div className="w-24 h-24 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center p-3">
               <img src={schoolLogo} alt="Shevet-city logo" className="w-full h-full object-contain" />
             </div>
 
-            <h3 className="mt-4 text-lg font-extrabold text-blue-900">{organizationName}</h3>
-            <p className="mt-1 text-sm font-semibold text-yellow-600 italic">{tagline}</p>
+            <h3 className="mt-4 text-lg font-extrabold" style={{ color: primaryColor }}>
+              {organizationName}
+            </h3>
+            <p className="mt-1 text-sm font-semibold" style={{ color: accentColor, fontStyle: "italic" }}>
+              {tagline}
+            </p>
 
             <div className="mt-5 w-full rounded-xl bg-white border border-slate-200 p-4">
-              <div className="flex items-center justify-center gap-2 text-blue-900 font-extrabold">
+              <div className="flex items-center justify-center gap-2" style={{ color: primaryColor, fontWeight: 800 }}>
                 <BsStars />
                 <span>Core Values</span>
               </div>
@@ -243,11 +287,13 @@ const AboutUs = ({
               <div className="mt-4 grid grid-cols-2 gap-3">
                 {values.map((v) => (
                   <div key={v.letter} className="rounded-xl border border-slate-100 bg-slate-50 p-3 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-900 text-white flex items-center justify-center font-extrabold">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-extrabold" style={{ background: primaryColor, color: "#fff" }}>
                       {v.letter}
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-extrabold text-blue-900">{v.word}</p>
+                      <p className="text-sm font-extrabold" style={{ color: primaryColor }}>
+                        {v.word}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -258,14 +304,22 @@ const AboutUs = ({
           {/* Mission + Vision + Why us */}
           <div className="lg:col-span-2 grid gap-6">
             {/* Mission & Vision */}
-            <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="grid gap-6 md:grid-cols-2">
+            <motion.div
+              variants={itemVar}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="grid gap-6 md:grid-cols-2"
+            >
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center text-xl border border-blue-100">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl border" style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}>
                     <BsShieldCheck />
                   </div>
                   <div>
-                    <h3 className="text-xl font-extrabold text-blue-900">Our Mission</h3>
+                    <h3 className="text-xl font-extrabold" style={{ color: primaryColor }}>
+                      Our Mission
+                    </h3>
                     <p className="text-sm text-slate-600 mt-1">What we exist to achieve.</p>
                   </div>
                 </div>
@@ -277,11 +331,13 @@ const AboutUs = ({
 
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-yellow-50 text-yellow-700 flex items-center justify-center text-xl border border-yellow-100">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl border" style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}>
                     <BsGlobe2 />
                   </div>
                   <div>
-                    <h3 className="text-xl font-extrabold text-blue-900">Our Vision</h3>
+                    <h3 className="text-xl font-extrabold" style={{ color: primaryColor }}>
+                      Our Vision
+                    </h3>
                     <p className="text-sm text-slate-600 mt-1">Where we are headed.</p>
                   </div>
                 </div>
@@ -293,14 +349,22 @@ const AboutUs = ({
             </motion.div>
 
             {/* Why us */}
-            <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+            <motion.div
+              variants={itemVar}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8"
+            >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-900 flex items-center justify-center text-2xl border border-blue-100">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl border" style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}>
                   <BsHeartPulse />
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-xl md:text-2xl font-extrabold text-blue-900">Why {organizationName}?</h3>
+                  <h3 className="text-xl md:text-2xl font-extrabold" style={{ color: primaryColor }}>
+                    Why {organizationName}?
+                  </h3>
 
                   <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed">
                     We combine creative production, investigative rigor and community focus to produce media that matters — delivered across platforms for maximum reach and effect.
@@ -320,7 +384,7 @@ const AboutUs = ({
                       "Audience-focused, impact-driven campaigns",
                     ].map((p) => (
                       <li key={p} className="flex items-start gap-2 text-sm text-slate-700">
-                        <span className="mt-1 text-yellow-500">
+                        <span className="mt-1" style={{ color: accentColor }}>
                           <BsCheck2Circle />
                         </span>
                         <span className="leading-relaxed">{p}</span>
@@ -332,8 +396,16 @@ const AboutUs = ({
             </motion.div>
 
             {/* Our Focus Areas (media framing of the previous 'teaching paradigm') */}
-            <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="bg-slate-50 rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-              <h3 className="text-xl md:text-2xl font-extrabold text-blue-900">Our Focus Areas</h3>
+            <motion.div
+              variants={itemVar}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="bg-slate-50 rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8"
+            >
+              <h3 className="text-xl md:text-2xl font-extrabold" style={{ color: primaryColor }}>
+                Our Focus Areas
+              </h3>
               <p className="mt-2 text-sm md:text-base text-slate-600 max-w-3xl">
                 We work across production, journalism, events, research and training to create content and initiatives that educate, inform and entertain.
               </p>
@@ -341,16 +413,26 @@ const AboutUs = ({
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {paradigms.map((x) => (
                   <div key={x.label} className="rounded-2xl bg-white border border-slate-200 p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-900 text-white flex items-center justify-center text-lg">{x.icon}</div>
-                    <p className="text-sm font-extrabold text-blue-900">{x.label}</p>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: primaryColor, color: "#fff" }}>
+                      {x.icon}
+                    </div>
+                    <p className="text-sm font-extrabold" style={{ color: primaryColor }}>{x.label}</p>
                   </div>
                 ))}
               </div>
             </motion.div>
 
             {/* New: Expanded Editorial Sections */}
-            <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-              <h3 className="text-xl md:text-2xl font-extrabold text-blue-900">Editorial & Content Sections</h3>
+            <motion.div
+              variants={itemVar}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8"
+            >
+              <h3 className="text-xl md:text-2xl font-extrabold" style={{ color: primaryColor }}>
+                Editorial & Content Sections
+              </h3>
               <p className="mt-2 text-sm md:text-base text-slate-600">
                 Our editorial and content verticals span culture, lifestyle, magazine features, news and more:
               </p>
@@ -358,11 +440,11 @@ const AboutUs = ({
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(additionalSections).map(([section, items]) => (
                   <div key={section} className="rounded-xl border border-slate-100 p-4 bg-slate-50">
-                    <h4 className="font-extrabold text-blue-900">{section}</h4>
+                    <h4 className="font-extrabold" style={{ color: primaryColor }}>{section}</h4>
                     <ul className="mt-2 text-sm text-slate-700 space-y-1">
                       {items.map((it) => (
                         <li key={it} className="flex items-start gap-2">
-                          <span className="mt-1 text-yellow-500"><BsArrowRight /></span>
+                          <span className="mt-1" style={{ color: accentColor }}><BsArrowRight /></span>
                           <span>{it}</span>
                         </li>
                       ))}
@@ -373,7 +455,17 @@ const AboutUs = ({
             </motion.div>
 
             {/* CTA */}
-            <motion.div variants={itemVar} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} className="rounded-2xl overflow-hidden border border-blue-100 shadow-sm bg-gradient-to-r from-blue-900 via-blue-700 to-yellow-400">
+            <motion.div
+              variants={itemVar}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="rounded-2xl overflow-hidden border shadow-sm"
+              style={{
+                background: `linear-gradient(90deg, ${primaryColor}, ${primaryDark} 60%, ${accentColor})`,
+                borderColor: "rgba(90,0,90,0.08)",
+              }}
+            >
               <div className="p-6 md:p-8 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 <div className="max-w-2xl">
                   <p className="text-xs font-semibold tracking-[0.35em] uppercase text-white/90">Collaborate</p>
@@ -383,13 +475,13 @@ const AboutUs = ({
 
                 <div className="flex gap-3 flex-wrap">
                   <ScrollLink to="services" smooth offset={-90} duration={500} className="cursor-pointer">
-                    <button type="button" className="px-6 py-3 rounded-full bg-white text-blue-900 font-extrabold hover:bg-slate-100 transition inline-flex items-center gap-2">
+                    <button type="button" className="px-6 py-3 rounded-full bg-white text-[#5A005A] font-extrabold hover:bg-slate-100 transition inline-flex items-center gap-2">
                       Our Services <BsArrowRight />
                     </button>
                   </ScrollLink>
 
                   <ScrollLink to="contact" smooth offset={-90} duration={500} className="cursor-pointer">
-                    <button type="button" className="px-6 py-3 rounded-full border-2 border-white text-white font-extrabold hover:bg-white hover:text-blue-900 transition">
+                    <button type="button" className="px-6 py-3 rounded-full border-2 border-white text-white font-extrabold hover:bg-white hover:text-[#5A005A] transition">
                       Contact Us
                     </button>
                   </ScrollLink>
