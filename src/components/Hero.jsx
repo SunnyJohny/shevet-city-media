@@ -303,7 +303,7 @@ const Hero = () => {
                 Questions?
               </span>
              <span>(+234) 906 906 0610</span>
-              <span>www.shevecitymedia.com</span>
+              <span>www.shevet-citymedia.com</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
