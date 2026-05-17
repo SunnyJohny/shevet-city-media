@@ -10,8 +10,25 @@ import React, {
 } from "react";
 import { db } from "../firebase";
 
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const MyContext = createContext(null);
 
@@ -20,40 +37,32 @@ export const useMyContext = () => {
   return context;
 };
 
-const SCHOOL_ID = "main";
+const SHEVET_CITY_ID = "the-shevet-city";
 
-// =========================
-// Browser cache settings
-// =========================
 const CACHE_KEYS = {
-  gallery: `springfieldschool_${SCHOOL_ID}_gallery_cache`,
-  news: `springfieldschool_${SCHOOL_ID}_news_cache`,
-  role: (uid) => `springfieldschool_${SCHOOL_ID}_role_cache_${uid}`,
+  gallery: `shevetcity_${SHEVET_CITY_ID}_gallery_cache`,
+  news: `shevetcity_${SHEVET_CITY_ID}_news_cache`,
+  role: (uid) => `shevetcity_${SHEVET_CITY_ID}_role_cache_${uid}`,
 };
 
 const CACHE_TTL = {
-  gallery: 1000 * 60 * 10, // 10 mins
-  news: 1000 * 60 * 5, // 5 mins
-  role: 1000 * 60 * 5, // 5 mins
+  gallery: 1000 * 60 * 10,
+  news: 1000 * 60 * 5,
+  role: 1000 * 60 * 5,
 };
 
-// Optional admin email fallback
 const ADMIN_EMAILS = ["johnsunday803@gmail.com"];
 
-// =========================
-// Safe browser storage helpers
-// =========================
-const canUseStorage = () => typeof window !== "undefined" && typeof localStorage !== "undefined";
+const canUseStorage = () =>
+  typeof window !== "undefined" && typeof localStorage !== "undefined";
 
 const readCache = (key) => {
   try {
     if (!canUseStorage()) return null;
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
-
     return parsed;
   } catch (err) {
     console.error("readCache error:", err);
@@ -64,6 +73,7 @@ const readCache = (key) => {
 const writeCache = (key, data) => {
   try {
     if (!canUseStorage()) return;
+
     localStorage.setItem(
       key,
       JSON.stringify({
@@ -76,14 +86,20 @@ const writeCache = (key, data) => {
   }
 };
 
+const removeCache = (key) => {
+  try {
+    if (!canUseStorage()) return;
+    localStorage.removeItem(key);
+  } catch (err) {
+    console.error("removeCache error:", err);
+  }
+};
+
 const isCacheFresh = (entry, ttl) => {
   if (!entry?.savedAt) return false;
   return Date.now() - entry.savedAt < ttl;
 };
 
-// =========================
-// Normalize Firestore data
-// =========================
 const serializeDoc = (snap) => {
   const raw = snap.data() || {};
 
@@ -128,62 +144,57 @@ const normalizeRolePayload = (data, email = "") => {
     emailMatch;
 
   return {
-    role: admin ? "admin" : roleValue || null,
+    role: admin ? "admin" : roleValue || "viewer",
     isAdmin: admin,
   };
 };
 
 export const MyContextProvider = ({ children }) => {
-  // ✅ auth
   const [currentUser, setCurrentUser] = useState(null);
-
-  // ✅ role
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ✅ gallery (GLOBAL)
   const [gallery, setGallery] = useState(() => {
     const cached = readCache(CACHE_KEYS.gallery);
     return Array.isArray(cached?.data) ? cached.data : [];
   });
+
   const [galleryLoading, setGalleryLoading] = useState(() => {
     const cached = readCache(CACHE_KEYS.gallery);
     return !(cached && Array.isArray(cached.data));
   });
+
   const [galleryError, setGalleryError] = useState(null);
 
-  // ✅ news (GLOBAL)
   const [news, setNews] = useState(() => {
     const cached = readCache(CACHE_KEYS.news);
     return Array.isArray(cached?.data) ? cached.data : [];
   });
+
   const [newsLoading, setNewsLoading] = useState(() => {
     const cached = readCache(CACHE_KEYS.news);
     return !(cached && Array.isArray(cached.data));
   });
+
   const [newsError, setNewsError] = useState(null);
 
-  // prevent duplicate fetches in React StrictMode / rapid rerenders
   const roleRequestRef = useRef({});
   const galleryRequestRef = useRef(null);
   const newsRequestRef = useRef(null);
 
-  // -------------------------
-  // 1) Watch auth state
-  // -------------------------
   useEffect(() => {
     const auth = getAuth();
 
-    const unsub = onAuthStateChanged(auth, (u) => {
-      const user = u || null;
-      setCurrentUser(user);
+    const unsub = onAuthStateChanged(auth, (user) => {
+      const activeUser = user || null;
+      setCurrentUser(activeUser);
 
-      if (!user) {
+      if (!activeUser) {
         setIsAdmin(false);
         return;
       }
 
-      // quick zero-read fallback while role doc loads
-      const email = String(user.email || "").toLowerCase();
+      const email = String(activeUser.email || "").toLowerCase();
+
       if (ADMIN_EMAILS.includes(email)) {
         setIsAdmin(true);
       }
@@ -192,61 +203,59 @@ export const MyContextProvider = ({ children }) => {
     return () => unsub();
   }, []);
 
-  // -------------------------
-  // 2) Load role ONCE: springfieldschool/main/users/{uid}
-  //    Uses localStorage cache to reduce reads
-  // -------------------------
-  const loadUserRole = useCallback(async (uid, email = "", forceRefresh = false) => {
-    if (!uid) {
-      setIsAdmin(false);
-      return;
-    }
-
-    const cacheKey = CACHE_KEYS.role(uid);
-    const cached = readCache(cacheKey);
-
-    // ✅ use fresh cache first
-    if (!forceRefresh && cached && isCacheFresh(cached, CACHE_TTL.role)) {
-      const cachedIsAdmin =
-        cached?.data?.isAdmin === true ||
-        String(cached?.data?.role || "").toLowerCase() === "admin";
-
-      setIsAdmin(cachedIsAdmin);
-      return;
-    }
-
-    if (!forceRefresh && roleRequestRef.current[uid]) {
-      return roleRequestRef.current[uid];
-    }
-
-    const request = (async () => {
-      try {
-        const userRef = doc(db, "springfieldschool", SCHOOL_ID, "users", uid);
-        const snap = await getDoc(userRef);
-
-        const normalized = snap.exists()
-          ? normalizeRolePayload(snap.data(), email)
-          : normalizeRolePayload({}, email);
-
-        setIsAdmin(normalized.isAdmin);
-        writeCache(cacheKey, normalized);
-      } catch (err) {
-        console.error("Role get error:", err);
-
-        const fallbackIsAdmin =
-          cached?.data?.isAdmin === true ||
-          String(cached?.data?.role || "").toLowerCase() === "admin" ||
-          ADMIN_EMAILS.includes(String(email || "").toLowerCase());
-
-        setIsAdmin(fallbackIsAdmin);
-      } finally {
-        delete roleRequestRef.current[uid];
+  const loadUserRole = useCallback(
+    async (uid, email = "", forceRefresh = false) => {
+      if (!uid) {
+        setIsAdmin(false);
+        return;
       }
-    })();
 
-    roleRequestRef.current[uid] = request;
-    return request;
-  }, []);
+      const cacheKey = CACHE_KEYS.role(uid);
+      const cached = readCache(cacheKey);
+
+      if (!forceRefresh && cached && isCacheFresh(cached, CACHE_TTL.role)) {
+        const cachedIsAdmin =
+          cached?.data?.isAdmin === true ||
+          String(cached?.data?.role || "").toLowerCase() === "admin";
+
+        setIsAdmin(cachedIsAdmin);
+        return;
+      }
+
+      if (!forceRefresh && roleRequestRef.current[uid]) {
+        return roleRequestRef.current[uid];
+      }
+
+      const request = (async () => {
+        try {
+          const userRef = doc(db, "shevetCity", SHEVET_CITY_ID, "users", uid);
+          const snap = await getDoc(userRef);
+
+          const normalized = snap.exists()
+            ? normalizeRolePayload(snap.data(), email)
+            : normalizeRolePayload({}, email);
+
+          setIsAdmin(normalized.isAdmin);
+          writeCache(cacheKey, normalized);
+        } catch (err) {
+          console.error("Shevet-City role get error:", err);
+
+          const fallbackIsAdmin =
+            cached?.data?.isAdmin === true ||
+            String(cached?.data?.role || "").toLowerCase() === "admin" ||
+            ADMIN_EMAILS.includes(String(email || "").toLowerCase());
+
+          setIsAdmin(fallbackIsAdmin);
+        } finally {
+          delete roleRequestRef.current[uid];
+        }
+      })();
+
+      roleRequestRef.current[uid] = request;
+      return request;
+    },
+    []
+  );
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -257,23 +266,111 @@ export const MyContextProvider = ({ children }) => {
     loadUserRole(currentUser.uid, currentUser.email || "");
   }, [currentUser?.uid, currentUser?.email, loadUserRole]);
 
-  // -------------------------
-  // 3) Load gallery ONCE: springfieldschool/main/gallery
-  //    Uses browser cache first to reduce reads
-  // -------------------------
+  const signInShevetCityUser = useCallback(
+    async ({ email, password }) => {
+      const auth = getAuth();
+
+      if (!email || !password) {
+        throw new Error("Email and password are required.");
+      }
+
+      const result = await signInWithEmailAndPassword(auth, email, password);
+
+      await loadUserRole(result.user.uid, result.user.email || "", true);
+
+      return result.user;
+    },
+    [loadUserRole]
+  );
+
+  const signUpShevetCityUser = useCallback(
+    async ({ name, phone, email, password, role = "viewer" }) => {
+      const auth = getAuth();
+
+      if (!name || !email || !password) {
+        throw new Error("Name, email, and password are required.");
+      }
+
+      const result = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      if (result.user) {
+        await updateProfile(result.user, {
+          displayName: name,
+        });
+      }
+
+      const normalizedRole = ADMIN_EMAILS.includes(
+        String(email || "").toLowerCase()
+      )
+        ? "admin"
+        : role || "viewer";
+
+      const userPayload = {
+        uid: result.user.uid,
+        name,
+        displayName: name,
+        phone: phone || "",
+        email,
+        role: normalizedRole,
+        isAdmin: normalizedRole === "admin",
+        provider: "email-password",
+        platform: "shevet-city",
+        createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const userRef = doc(
+        db,
+        "shevetCity",
+        SHEVET_CITY_ID,
+        "users",
+        result.user.uid
+      );
+
+      await setDoc(userRef, userPayload, { merge: true });
+
+      writeCache(CACHE_KEYS.role(result.user.uid), {
+        role: normalizedRole,
+        isAdmin: normalizedRole === "admin",
+      });
+
+      setIsAdmin(normalizedRole === "admin");
+
+      return result.user;
+    },
+    []
+  );
+
+  const logoutShevetCityUser = useCallback(async () => {
+    const auth = getAuth();
+    const uid = auth.currentUser?.uid;
+
+    await signOut(auth);
+
+    setCurrentUser(null);
+    setIsAdmin(false);
+
+    if (uid) {
+      removeCache(CACHE_KEYS.role(uid));
+    }
+  }, []);
+
   const loadGallery = useCallback(async (forceRefresh = false) => {
     setGalleryError(null);
 
     const cached = readCache(CACHE_KEYS.gallery);
 
-    // ✅ show fresh cache only, no read
     if (!forceRefresh && cached && isCacheFresh(cached, CACHE_TTL.gallery)) {
       setGallery(Array.isArray(cached.data) ? cached.data : []);
       setGalleryLoading(false);
       return;
     }
 
-    // ✅ show stale cache while background refresh runs
     if (cached && Array.isArray(cached.data)) {
       setGallery(cached.data);
       setGalleryLoading(false);
@@ -287,7 +384,13 @@ export const MyContextProvider = ({ children }) => {
 
     const request = (async () => {
       try {
-        const galleryRef = collection(db, "springfieldschool", SCHOOL_ID, "gallery");
+        const galleryRef = collection(
+          db,
+          "shevetCity",
+          SHEVET_CITY_ID,
+          "gallery"
+        );
+
         const q = query(galleryRef, orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
 
@@ -300,7 +403,7 @@ export const MyContextProvider = ({ children }) => {
 
         writeCache(CACHE_KEYS.gallery, sorted);
       } catch (err) {
-        console.error("Gallery get error:", err);
+        console.error("Shevet-City gallery get error:", err);
 
         if (cached && Array.isArray(cached.data)) {
           setGallery(cached.data);
@@ -309,7 +412,7 @@ export const MyContextProvider = ({ children }) => {
         }
 
         setGalleryLoading(false);
-        setGalleryError(err?.message || "Failed to load gallery");
+        setGalleryError(err?.message || "Failed to load Shevet-City gallery");
       } finally {
         galleryRequestRef.current = null;
       }
@@ -323,27 +426,17 @@ export const MyContextProvider = ({ children }) => {
     loadGallery();
   }, [loadGallery]);
 
-  // -------------------------
-  // 4) Load news ONCE: springfieldschool/main/news
-  //    Strategy:
-  //      A) Try orderBy(createdAtMs)
-  //      B) Fallback orderBy(createdAt)
-  //      C) Fallback no orderBy + client sort
-  //    Uses browser cache first to reduce reads
-  // -------------------------
   const loadNews = useCallback(async (forceRefresh = false) => {
     setNewsError(null);
 
     const cached = readCache(CACHE_KEYS.news);
 
-    // ✅ use fresh cache first
     if (!forceRefresh && cached && isCacheFresh(cached, CACHE_TTL.news)) {
       setNews(Array.isArray(cached.data) ? cached.data : []);
       setNewsLoading(false);
       return;
     }
 
-    // ✅ show stale cache while background refresh runs
     if (cached && Array.isArray(cached.data)) {
       setNews(cached.data);
       setNewsLoading(false);
@@ -356,7 +449,7 @@ export const MyContextProvider = ({ children }) => {
     }
 
     const request = (async () => {
-      const newsRef = collection(db, "springfieldschool", SCHOOL_ID, "news");
+      const newsRef = collection(db, "shevetCity", SHEVET_CITY_ID, "news");
 
       try {
         const q1 = query(newsRef, orderBy("createdAtMs", "desc"));
@@ -372,7 +465,7 @@ export const MyContextProvider = ({ children }) => {
         writeCache(CACHE_KEYS.news, sorted);
         return;
       } catch (err1) {
-        console.error("News primary get error (createdAtMs):", err1);
+        console.error("Shevet-City news primary get error:", err1);
 
         try {
           const q2 = query(newsRef, orderBy("createdAt", "desc"));
@@ -388,7 +481,7 @@ export const MyContextProvider = ({ children }) => {
           writeCache(CACHE_KEYS.news, sorted2);
           return;
         } catch (err2) {
-          console.error("News fallback get error (createdAt):", err2);
+          console.error("Shevet-City news fallback get error:", err2);
 
           try {
             const snap3 = await getDocs(newsRef);
@@ -403,7 +496,7 @@ export const MyContextProvider = ({ children }) => {
             writeCache(CACHE_KEYS.news, sorted3);
             return;
           } catch (err3) {
-            console.error("News fallback get error (no order):", err3);
+            console.error("Shevet-City news final get error:", err3);
 
             if (cached && Array.isArray(cached.data)) {
               setNews(cached.data);
@@ -412,7 +505,7 @@ export const MyContextProvider = ({ children }) => {
             }
 
             setNewsLoading(false);
-            setNewsError(err3?.message || "Failed to load news");
+            setNewsError(err3?.message || "Failed to load Shevet-City news");
           }
         }
       } finally {
@@ -428,9 +521,6 @@ export const MyContextProvider = ({ children }) => {
     loadNews();
   }, [loadNews]);
 
-  // -------------------------
-  // Optional manual refreshers
-  // -------------------------
   const refreshGallery = useCallback(() => {
     return loadGallery(true);
   }, [loadGallery]);
@@ -444,40 +534,51 @@ export const MyContextProvider = ({ children }) => {
       setIsAdmin(false);
       return Promise.resolve();
     }
+
     return loadUserRole(currentUser.uid, currentUser.email || "", true);
   }, [currentUser?.uid, currentUser?.email, loadUserRole]);
 
   const value = useMemo(
     () => ({
-      // auth
       currentUser,
       isAdmin,
 
-      // gallery
+      signInShevetCityUser,
+      signUpShevetCityUser,
+      logoutShevetCityUser,
+
+      signInShevetUser: signInShevetCityUser,
+      signUpShevetUser: signUpShevetCityUser,
+      logoutShevetUser: logoutShevetCityUser,
+
       gallery,
       galleryLoading,
       galleryError,
       refreshGallery,
 
-      // news
       news,
       newsLoading,
       newsError,
       refreshNews,
 
-      // role
       refreshRole,
+
+      shevetGallery: gallery,
+      publishedShevetGallery: gallery,
     }),
     [
       currentUser,
       isAdmin,
+      signInShevetCityUser,
+      signUpShevetCityUser,
+      logoutShevetCityUser,
       gallery,
       galleryLoading,
       galleryError,
+      refreshGallery,
       news,
       newsLoading,
       newsError,
-      refreshGallery,
       refreshNews,
       refreshRole,
     ]
@@ -486,4 +587,4 @@ export const MyContextProvider = ({ children }) => {
   return <MyContext.Provider value={value}>{children}</MyContext.Provider>;
 };
 
-export default MyContextProvider;  
+export default MyContextProvider;

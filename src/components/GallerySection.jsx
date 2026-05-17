@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BsChevronLeft,
@@ -10,33 +10,22 @@ import {
   BsTrash,
 } from "react-icons/bs";
 import { toast } from "react-toastify";
-
-// FIRESTORE / STORAGE imports intentionally commented out — running in hardcoded/demo mode.
-/*
 import {
   addDoc,
   collection,
-  serverTimestamp,
-  doc,
-  updateDoc,
   deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
-
-import {
-  getDownloadURL,
-  ref,
-  uploadBytesResumable,
-  deleteObject,
-} from "firebase/storage";
-
-import { db, storage } from "../firebase";
-*/
-
+import { db } from "../firebase";
 import { useMyContext } from "../Context/MyContext";
-// Local fallback gallery (hardcoded images)
 import HardcodedGallery from "../data/HardcodedGallery";
 
-const SCHOOL_ID = "main";
+const SHEVET_CITY_ID = "the-shevet-city";
 const INITIAL_VISIBLE_COUNT = 6;
 const LOAD_MORE_COUNT = 6;
 
@@ -76,101 +65,167 @@ const modalPanel = {
   exit: { opacity: 0, scale: 0.98, y: 10, transition: { duration: 0.2 } },
 };
 
+const categoriesPreset = [
+  "Media",
+  "Productions",
+  "Behind The Scenes",
+  "Events",
+  "Activities",
+  "Culture",
+  "Entertainment",
+  "Lifestyle",
+  "Magazine",
+  "News",
+];
+
 const getUniqueCategories = (items) => {
   const cats = new Set((items || []).map((i) => i.category).filter(Boolean));
   return ["All", ...Array.from(cats)];
 };
 
-const categoriesPreset = [
-  "Academics",
-  "STEM",
-  "Sports",
-  "Events",
-  "Facilities",
-  "Activities",
-  "Media",
-];
+const normalize = (raw) => {
+  if (!raw) return "/images/SheveCity.png";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return raw.startsWith("/") ? raw : `/${raw}`;
+};
+
+const serializeDoc = (snap) => {
+  const data = snap.data() || {};
+
+  let createdAtMs = 0;
+
+  if (typeof data.createdAtMs === "number" && data.createdAtMs > 0) {
+    createdAtMs = data.createdAtMs;
+  } else if (data.createdAt?.toDate) {
+    createdAtMs = data.createdAt.toDate().getTime();
+  }
+
+  return {
+    id: snap.id,
+    ...data,
+    createdAtMs,
+  };
+};
+
+const sortByCreatedDesc = (items = []) => {
+  return [...items].sort((a, b) => {
+    const aMs = typeof a.createdAtMs === "number" ? a.createdAtMs : 0;
+    const bMs = typeof b.createdAtMs === "number" ? b.createdAtMs : 0;
+    return bMs - aMs;
+  });
+};
 
 const formatTimestamp = (ts, createdAtMs) => {
   try {
     const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+
     if (d) return d.toLocaleString();
+
     if (typeof createdAtMs === "number" && createdAtMs > 0) {
       return new Date(createdAtMs).toLocaleString();
     }
-    return "";
-  } catch {
-    return "";
-  }
-};
 
-// kept for completeness (not used in demo mode)
-const storagePathFromUrl = (url) => {
-  try {
-    if (!url) return null;
-    const u = new URL(url);
-    const idx = u.pathname.indexOf("/o/");
-    if (idx === -1) return null;
-    const encoded = u.pathname.substring(idx + 3);
-    return decodeURIComponent(encoded);
+    return "";
   } catch {
-    return null;
+    return "";
   }
 };
 
 const GallerySection = ({ title, subtitle }) => {
-  // We still read admin/uid state from context so admin UI can show/hide appropriately,
-  // but we do NOT read/write gallery data from Firestore in demo mode.
-  const { /* gallery, */ galleryLoading, galleryError, isAdmin, currentUser } =
-    useMyContext();
+  const { currentUser } = useMyContext();
 
-  // Build items exclusively from the local HardcodedGallery.
-  // Normalizes image paths to use leading '/' for public/ folder files.
-  const items = useMemo(() => {
-    const normalize = (raw) => {
-      if (!raw) return "/images/SheveCity.png";
-      if (/^https?:\/\//i.test(raw)) return raw;
-      return raw.startsWith("/") ? raw : `/${raw}`;
-    };
+  const [remoteGallery, setRemoteGallery] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(true);
+  const [galleryError, setGalleryError] = useState(null);
 
-    return HardcodedGallery.map((h) => ({
-      id: `hc-${h.id}`,
-      src: normalize(h.image),
-      alt: h.name || "SHEVET-CITY photo",
-      description: h.description || "",
-      category: h.category || "Media",
-      createdAtMs: h.createdAtMs || 0,
-      createdAt: h.createdAt || null,
-      storagePath: h.storagePath || null,
-    }));
-  }, []);
-
-  // ✅ filter / lightbox
   const [activeCat, setActiveCat] = useState("All");
   const [activeIndex, setActiveIndex] = useState(null);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
 
-  // ✅ admin upload modal (demo mode: no Firestore)
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [newAlt, setNewAlt] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newCategory, setNewCategory] = useState("Media");
+  const [newStatus, setNewStatus] = useState("published");
   const [file, setFile] = useState(null);
   const fileInputRef = useRef(null);
 
-  // ✅ admin edit modal (demo mode: no Firestore)
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editAlt, setEditAlt] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editCategory, setEditCategory] = useState("Media");
+  const [editStatus, setEditStatus] = useState("published");
+  const [editFile, setEditFile] = useState(null);
+  const editFileInputRef = useRef(null);
 
-  // ✅ admin delete confirm modal (demo mode: no Firestore)
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const galleryCollectionRef = useMemo(() => {
+    return collection(db, "shevetCity", SHEVET_CITY_ID, "gallery");
+  }, []);
+
+  const fallbackItems = useMemo(() => {
+    return HardcodedGallery.map((h) => ({
+      id: `hc-${h.id}`,
+      src: normalize(h.image),
+      imageUrl: normalize(h.image),
+      alt: h.name || "SHEVET-CITY photo",
+      title: h.name || "SHEVET-CITY photo",
+      description: h.description || "",
+      category: h.category || "Media",
+      createdAtMs: h.createdAtMs || 0,
+      createdAt: h.createdAt || null,
+      status: "published",
+      isFallback: true,
+    }));
+  }, []);
+
+  const loadGallery = useCallback(async () => {
+    try {
+      setGalleryLoading(true);
+      setGalleryError(null);
+
+      const q = query(galleryCollectionRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+
+      const data = snap.docs.map(serializeDoc);
+      setRemoteGallery(sortByCreatedDesc(data));
+    } catch (error) {
+      console.error("Shevet-City gallery fetch error:", error);
+      setGalleryError(error.message || "Failed to load gallery.");
+      setRemoteGallery([]);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, [galleryCollectionRef]);
+
+  useEffect(() => {
+    loadGallery();
+  }, [loadGallery]);
+
+  const sourceItems = remoteGallery.length > 0 ? remoteGallery : fallbackItems;
+
+  const items = useMemo(() => {
+    return sourceItems.map((item) => ({
+      ...item,
+      id: item.id,
+      src: item.src || item.imageUrl || item.mediaUrl || normalize(item.image),
+      imageUrl: item.imageUrl || item.src || item.mediaUrl || normalize(item.image),
+      alt: item.alt || item.title || item.name || "SHEVET-CITY photo",
+      title: item.title || item.alt || item.name || "SHEVET-CITY photo",
+      description: item.description || "",
+      category: item.category || "Media",
+      createdAtMs: item.createdAtMs || 0,
+      createdAt: item.createdAt || null,
+      status: item.status || "published",
+    }));
+  }, [sourceItems]);
 
   const categories = useMemo(() => getUniqueCategories(items), [items]);
 
@@ -190,6 +245,8 @@ const GallerySection = ({ title, subtitle }) => {
     setVisibleCount(INITIAL_VISIBLE_COUNT);
   }, [activeCat, items.length]);
 
+  const activeItem = activeIndex !== null ? filtered[activeIndex] : null;
+
   const openModal = (index) => setActiveIndex(index);
   const closeModal = () => setActiveIndex(null);
 
@@ -203,15 +260,6 @@ const GallerySection = ({ title, subtitle }) => {
     setActiveIndex((prev) => (prev + 1) % filtered.length);
   };
 
-  const handleLoadMore = () => {
-    setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, filtered.length));
-  };
-
-  const handleShowLess = () => {
-    setVisibleCount(INITIAL_VISIBLE_COUNT);
-  };
-
-  // Keyboard navigation for lightbox modal
   useEffect(() => {
     if (activeIndex === null) return;
 
@@ -225,18 +273,22 @@ const GallerySection = ({ title, subtitle }) => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeIndex, filtered.length]);
 
-  const activeItem = activeIndex !== null ? filtered[activeIndex] : null;
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, filtered.length));
+  };
 
-  // ✅ IMPORTANT: Fix refresh “blank grid” by not depending on whileInView
-  const shouldShowGrid = !galleryLoading;
-  const gridAnimateState = shouldShowGrid ? "show" : "hidden";
+  const handleShowLess = () => {
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  };
 
-  // Admin helpers (demo: no Firestore calls)
   const resetAddForm = () => {
     setNewAlt("");
     setNewDesc("");
     setNewCategory("Media");
+    setNewStatus("published");
     setFile(null);
+    setUploadProgress(0);
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -246,94 +298,271 @@ const GallerySection = ({ title, subtitle }) => {
     resetAddForm();
   };
 
+  const resetEditForm = () => {
+    setEditId(null);
+    setEditAlt("");
+    setEditDesc("");
+    setEditCategory("Media");
+    setEditStatus("published");
+    setEditFile(null);
+    setUploadProgress(0);
+
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const closeEdit = () => {
+    if (editing) return;
+    setEditOpen(false);
+    resetEditForm();
+  };
+
   const handlePickFile = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const selectedFile = e.target.files?.[0];
 
-    if (!f.type?.startsWith("image/")) {
+    if (!selectedFile) return;
+
+    if (!selectedFile.type?.startsWith("image/")) {
       toast.error("Please select a valid image file.");
+      e.target.value = "";
       return;
     }
 
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error("Image too large. Max 5MB.");
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast.error("Image too large. Max 10MB.");
+      e.target.value = "";
       return;
     }
 
-    setFile(f);
+    setFile(selectedFile);
+  };
+
+  const handlePickEditFile = (e) => {
+    const selectedFile = e.target.files?.[0];
+
+    if (!selectedFile) return;
+
+    if (!selectedFile.type?.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      e.target.value = "";
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast.error("Image too large. Max 10MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setEditFile(selectedFile);
+  };
+
+  const uploadToCloudinary = (selectedFile, folderName) => {
+    return new Promise((resolve, reject) => {
+      if (!selectedFile) {
+        resolve("");
+        return;
+      }
+
+      const cloudName = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
+
+      if (!cloudName || !uploadPreset) {
+        reject(new Error("Cloudinary cloud name or upload preset is missing."));
+        return;
+      }
+
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+      const body = new FormData();
+      body.append("file", selectedFile);
+      body.append("upload_preset", uploadPreset);
+      body.append("folder", folderName);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.open("POST", uploadUrl);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(progress);
+        }
+      };
+
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadProgress(100);
+            resolve(data.secure_url);
+          } else {
+            reject(new Error(data?.error?.message || "Cloudinary upload failed."));
+          }
+        } catch {
+          reject(new Error("Invalid Cloudinary response."));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Upload failed. Check your internet connection."));
+      };
+
+      xhr.onabort = () => {
+        reject(new Error("Upload was aborted."));
+      };
+
+      xhr.send(body);
+    });
   };
 
   const handleUpload = async () => {
-    if (!isAdmin) return toast.error("Only admins can add to gallery.");
-    if (!currentUser?.uid) return toast.error("Please sign in first.");
-    if (!file) return toast.error("Please choose an image.");
-    if (!newCategory) return toast.error("Please select a category.");
+    if (!currentUser) {
+      toast.error("Please sign in before adding gallery content.");
+      return;
+    }
+
+    if (!file) {
+      toast.error("Please choose an image.");
+      return;
+    }
+
+    if (!newCategory) {
+      toast.error("Please select a category.");
+      return;
+    }
 
     try {
       setUploading(true);
-      const toastId = toast.loading("Upload skipped in demo mode — using local gallery");
-      setTimeout(() => {
-        toast.update(toastId, {
-          render: "Upload is disabled in demo mode. Use HardcodedGallery images instead.",
-          type: "info",
-          isLoading: false,
-          autoClose: 2500,
-        });
-        closeAdd();
-      }, 800);
-    } catch (e) {
-      console.error(e);
-      toast.error(e?.message || "Upload failed.");
+      setUploadProgress(0);
+
+      const imageUrl = await uploadToCloudinary(file, "shevet-city/gallery");
+
+      const payload = {
+        title: newAlt || "SHEVET-CITY photo",
+        alt: newAlt || "SHEVET-CITY photo",
+        description: newDesc || "",
+        category: newCategory,
+        imageUrl,
+        src: imageUrl,
+        mediaUrl: imageUrl,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        status: newStatus,
+        storageProvider: "cloudinary",
+        createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
+        updatedAt: serverTimestamp(),
+        createdBy: currentUser.uid,
+        createdByName:
+          currentUser.displayName || currentUser.email?.split("@")[0] || "User",
+        createdByEmail: currentUser.email || "",
+      };
+
+      await addDoc(galleryCollectionRef, payload);
+
+      toast.success("Gallery photo added successfully.");
+      closeAdd();
+      await loadGallery();
+    } catch (error) {
+      console.error("Error adding Shevet-City gallery photo:", error);
+      toast.error(error.message || "Failed to add gallery photo.");
     } finally {
       setUploading(false);
     }
   };
 
   const openEdit = (item) => {
-    if (!isAdmin) return;
+    if (!currentUser) {
+      toast.error("Please sign in before editing gallery content.");
+      return;
+    }
+
+    if (item?.isFallback || String(item?.id || "").startsWith("hc-")) {
+      toast.info("This is a hardcoded photo. Upload it first before editing.");
+      return;
+    }
+
     setEditId(item?.id || null);
-    setEditAlt(item?.alt || "");
+    setEditAlt(item?.alt || item?.title || "");
     setEditDesc(item?.description || "");
     setEditCategory(item?.category || "Media");
+    setEditStatus(item?.status || "published");
+    setEditFile(null);
     setEditOpen(true);
   };
 
-  const closeEdit = () => {
-    if (editing) return;
-    setEditOpen(false);
-    setEditId(null);
-    setEditAlt("");
-    setEditDesc("");
-    setEditCategory("Media");
-  };
-
   const handleEditSave = async () => {
-    if (!isAdmin) return toast.error("Only admins can edit gallery.");
-    if (!currentUser?.uid) return toast.error("Please sign in first.");
-    if (!editId) return toast.error("Missing gallery item id.");
+    if (!currentUser) {
+      toast.error("Please sign in before editing gallery content.");
+      return;
+    }
+
+    if (!editId) {
+      toast.error("Missing gallery item id.");
+      return;
+    }
 
     try {
       setEditing(true);
-      const toastId = toast.loading("Save skipped in demo mode");
-      setTimeout(() => {
-        toast.update(toastId, {
-          render: "Save is disabled in demo mode. Hardcoded images remain unchanged.",
-          type: "info",
-          isLoading: false,
-          autoClose: 2200,
-        });
-        closeEdit();
-      }, 700);
-    } catch (e) {
-      console.error(e);
-      toast.error(e?.message || "Update failed.");
+      setUploadProgress(0);
+
+      let imageUrl = null;
+
+      if (editFile) {
+        imageUrl = await uploadToCloudinary(editFile, "shevet-city/gallery");
+      }
+
+      const payload = {
+        title: editAlt || "SHEVET-CITY photo",
+        alt: editAlt || "SHEVET-CITY photo",
+        description: editDesc || "",
+        category: editCategory,
+        status: editStatus,
+        updatedAt: serverTimestamp(),
+        updatedAtMs: Date.now(),
+        updatedBy: currentUser.uid,
+        updatedByName:
+          currentUser.displayName || currentUser.email?.split("@")[0] || "User",
+        updatedByEmail: currentUser.email || "",
+      };
+
+      if (imageUrl) {
+        payload.imageUrl = imageUrl;
+        payload.src = imageUrl;
+        payload.mediaUrl = imageUrl;
+        payload.fileName = editFile.name;
+        payload.fileType = editFile.type;
+        payload.fileSize = editFile.size;
+        payload.storageProvider = "cloudinary";
+      }
+
+      const itemRef = doc(db, "shevetCity", SHEVET_CITY_ID, "gallery", editId);
+      await updateDoc(itemRef, payload);
+
+      toast.success("Gallery photo updated successfully.");
+      closeEdit();
+      await loadGallery();
+    } catch (error) {
+      console.error("Error updating Shevet-City gallery photo:", error);
+      toast.error(error.message || "Failed to update gallery photo.");
     } finally {
       setEditing(false);
     }
   };
 
   const openDelete = (item) => {
-    if (!isAdmin) return;
+    if (!currentUser) {
+      toast.error("Please sign in before deleting gallery content.");
+      return;
+    }
+
+    if (item?.isFallback || String(item?.id || "").startsWith("hc-")) {
+      toast.info("This is a hardcoded photo and cannot be deleted from here.");
+      return;
+    }
+
     setDeleteTarget(item);
     setDeleteOpen(true);
   };
@@ -345,33 +574,40 @@ const GallerySection = ({ title, subtitle }) => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!isAdmin) return toast.error("Only admins can delete gallery.");
-    if (!currentUser?.uid) return toast.error("Please sign in first.");
-    if (!deleteTarget?.id) return toast.error("Missing gallery item id.");
+    if (!currentUser) {
+      toast.error("Please sign in before deleting gallery content.");
+      return;
+    }
+
+    if (!deleteTarget?.id) {
+      toast.error("Missing gallery item id.");
+      return;
+    }
 
     try {
       setDeleting(true);
-      const toastId = toast.loading("Delete skipped in demo mode");
-      setTimeout(() => {
-        toast.update(toastId, {
-          render: "Delete is disabled in demo mode. Hardcoded images remain unchanged.",
-          type: "info",
-          isLoading: false,
-          autoClose: 2200,
-        });
-        closeDelete();
-      }, 700);
-    } catch (e) {
-      console.error(e);
-      toast.error(e?.message || "Delete failed.");
+
+      const itemRef = doc(
+        db,
+        "shevetCity",
+        SHEVET_CITY_ID,
+        "gallery",
+        deleteTarget.id
+      );
+
+      await deleteDoc(itemRef);
+
+      toast.success("Gallery photo deleted successfully.");
+      closeDelete();
+      await loadGallery();
+    } catch (error) {
+      console.error("Error deleting Shevet-City gallery photo:", error);
+      toast.error(error.message || "Failed to delete gallery photo.");
     } finally {
       setDeleting(false);
     }
   };
 
-  // Color constants used inline for consistency:
-  // Primary deep purple: #5A005A
-  // Accent golden orange: #F29A00 (hover #FFA500)
   const primaryColor = "#5A005A";
   const accentColor = "#F29A00";
   const accentHover = "#FFA500";
@@ -379,7 +615,6 @@ const GallerySection = ({ title, subtitle }) => {
   return (
     <section id="gallery" className="bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <motion.div
           variants={container}
           initial="hidden"
@@ -388,12 +623,18 @@ const GallerySection = ({ title, subtitle }) => {
           className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10"
         >
           <div>
-            <p className="text-xs font-semibold tracking-[0.3em] uppercase mb-2 inline-flex items-center gap-2" style={{ color: primaryColor }}>
+            <p
+              className="text-xs font-semibold tracking-[0.3em] uppercase mb-2 inline-flex items-center gap-2"
+              style={{ color: primaryColor }}
+            >
               <BsImages className="text-base" />
               Gallery
             </p>
 
-            <h2 className="text-3xl md:text-4xl font-extrabold leading-tight" style={{ color: primaryColor }}>
+            <h2
+              className="text-3xl md:text-4xl font-extrabold leading-tight"
+              style={{ color: primaryColor }}
+            >
               {title || "Moments from SHEVET-CITY Media"}
             </h2>
 
@@ -401,21 +642,28 @@ const GallerySection = ({ title, subtitle }) => {
               {subtitle ||
                 "Explore snapshots from SHEVET-CITY — productions, behind-the-scenes, events and creative moments."}
             </p>
+
+            {currentUser && (
+              <p className="text-xs font-semibold mt-3" style={{ color: primaryColor }}>
+                Signed-in CRUD mode active. You can add, edit, and delete gallery content.
+              </p>
+            )}
           </div>
 
-          {/* Right controls */}
           <div className="flex flex-col items-start md:items-end gap-3">
             {galleryLoading && (
-              <div className="text-xs font-semibold text-slate-500">Loading gallery...</div>
+              <div className="text-xs font-semibold text-slate-500">
+                Loading gallery...
+              </div>
             )}
 
             {galleryError && (
               <div className="text-xs font-semibold text-red-600">
-                Failed to load gallery. Running in local/demo mode.
+                Failed to load Firestore gallery. Showing local fallback content.
               </div>
             )}
 
-            {isAdmin && (
+            {currentUser ? (
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
@@ -430,12 +678,16 @@ const GallerySection = ({ title, subtitle }) => {
                 <BsPlusCircle className="text-base" />
                 Add to Gallery
               </button>
+            ) : (
+              <div className="text-xs font-semibold text-slate-500">
+                Sign in to add gallery content.
+              </div>
             )}
 
-            {/* Category pills */}
             <div className="flex flex-wrap gap-2">
               {categories.map((cat) => {
                 const active = cat === activeCat;
+
                 return (
                   <button
                     key={cat}
@@ -444,8 +696,16 @@ const GallerySection = ({ title, subtitle }) => {
                     className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition"
                     style={
                       active
-                        ? { background: primaryColor, color: "#fff", borderColor: primaryColor }
-                        : { background: "#fff", color: primaryColor, borderColor: "#e6e6e6" }
+                        ? {
+                            background: primaryColor,
+                            color: "#fff",
+                            borderColor: primaryColor,
+                          }
+                        : {
+                            background: "#fff",
+                            color: primaryColor,
+                            borderColor: "#e6e6e6",
+                          }
                     }
                     onMouseOver={(e) => {
                       if (!active) {
@@ -468,11 +728,10 @@ const GallerySection = ({ title, subtitle }) => {
           </div>
         </motion.div>
 
-        {/* Grid */}
         <motion.div
           variants={container}
           initial="hidden"
-          animate={gridAnimateState}
+          animate={!galleryLoading ? "show" : "hidden"}
           className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
         >
           {visibleItems.map((img, idx) => (
@@ -481,7 +740,6 @@ const GallerySection = ({ title, subtitle }) => {
               variants={itemVar}
               className="group overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-xl transition-shadow duration-500 flex flex-col"
             >
-              {/* Image opens lightbox */}
               <button
                 type="button"
                 onClick={() => openModal(idx)}
@@ -493,17 +751,17 @@ const GallerySection = ({ title, subtitle }) => {
                   loading="lazy"
                   className="w-full h-40 sm:h-48 md:h-56 lg:h-52 xl:h-56 object-cover group-hover:scale-[1.03] transition-transform duration-500"
                 />
+
                 <div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                   style={{
-                    background: `linear-gradient(to bottom right, rgba(242,154,0,0.07), rgba(0,0,0,0) 30%, rgba(90,0,90,0.08))`,
+                    background:
+                      "linear-gradient(to bottom right, rgba(242,154,0,0.07), rgba(0,0,0,0) 30%, rgba(90,0,90,0.08))",
                   }}
                 />
               </button>
 
-              {/* Text area UNDER the image */}
               <div className="p-3 sm:p-4 flex-1 flex flex-col">
-                {/* meta row */}
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className="text-[10px] md:text-xs font-semibold px-2.5 py-1 rounded-full"
@@ -515,27 +773,30 @@ const GallerySection = ({ title, subtitle }) => {
                   >
                     {img.category || "Media"}
                   </span>
+
                   <span className="text-[10px] text-slate-500 line-clamp-1">
                     {formatTimestamp(img.createdAt, img.createdAtMs)}
                   </span>
                 </div>
 
-                {/* title */}
-                <p className="mt-2 text-sm md:text-base font-extrabold line-clamp-1" style={{ color: primaryColor }}>
-                  {img.alt || "SHEVET-CITY photo"}
+                <p
+                  className="mt-2 text-sm md:text-base font-extrabold line-clamp-1"
+                  style={{ color: primaryColor }}
+                >
+                  {img.alt || img.title || "SHEVET-CITY photo"}
                 </p>
 
-                {/* description */}
                 {!!img.description ? (
                   <p className="mt-1 text-xs md:text-sm text-slate-600 leading-relaxed line-clamp-3">
                     {img.description}
                   </p>
                 ) : (
-                  <p className="mt-1 text-xs md:text-sm text-slate-400 italic">No description yet.</p>
+                  <p className="mt-1 text-xs md:text-sm text-slate-400 italic">
+                    No description yet.
+                  </p>
                 )}
 
-                {/* actions under the card content (only admin) */}
-                {isAdmin && (
+                {currentUser && !img.isFallback && (
                   <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
                       type="button"
@@ -564,8 +825,7 @@ const GallerySection = ({ title, subtitle }) => {
           ))}
         </motion.div>
 
-        {/* More / Show Less */}
-        {!galleryLoading && !galleryError && filtered.length > INITIAL_VISIBLE_COUNT && (
+        {!galleryLoading && filtered.length > INITIAL_VISIBLE_COUNT && (
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             {hasMore && (
               <button
@@ -599,17 +859,16 @@ const GallerySection = ({ title, subtitle }) => {
           </div>
         )}
 
-        {/* Empty state */}
-        {!galleryLoading && !galleryError && filtered.length === 0 && (
+        {!galleryLoading && filtered.length === 0 && (
           <div className="mt-10 text-center text-slate-600">
-            No gallery photos yet. {isAdmin ? "Click “Add to Gallery” to upload." : ""}
+            No gallery photos yet.{" "}
+            {currentUser ? "Click “Add to Gallery” to upload." : "Sign in to upload."}
           </div>
         )}
       </div>
 
-      {/* Admin Add Modal (demo/local mode) */}
       <AnimatePresence>
-        {addOpen && isAdmin && (
+        {addOpen && currentUser && (
           <motion.div
             className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70"
             variants={modalBackdrop}
@@ -620,38 +879,88 @@ const GallerySection = ({ title, subtitle }) => {
               if (e.target === e.currentTarget) closeAdd();
             }}
           >
-            <motion.div variants={modalPanel} initial="hidden" animate="show" exit="exit" className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl">
+            <motion.div
+              variants={modalPanel}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+              className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl"
+            >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Add to Gallery</p>
+                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                    Signed-in User
+                  </p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+                    Add to Gallery
+                  </p>
                 </div>
 
-                <button type="button" onClick={closeAdd} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
+                <button
+                  type="button"
+                  onClick={closeAdd}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+                  aria-label="Close"
+                >
                   <BsX className="text-2xl" />
                 </button>
               </div>
 
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Photo</label>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePickFile} className="mt-1 w-full text-sm" disabled={uploading} />
-                  <p className="mt-1 text-[11px] text-slate-500">JPG/PNG recommended. Max 5MB.</p>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Photo *
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePickFile}
+                    className="mt-1 w-full text-sm"
+                    disabled={uploading}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    JPG/PNG recommended. Max 10MB.
+                  </p>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Caption / Title</label>
-                  <input value={newAlt} onChange={(e) => setNewAlt(e.target.value)} placeholder="e.g. Behind the scenes" className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring" disabled={uploading} />
+                  <label className="text-xs font-semibold text-slate-600">
+                    Caption / Title
+                  </label>
+                  <input
+                    value={newAlt}
+                    onChange={(e) => setNewAlt(e.target.value)}
+                    placeholder="e.g. Behind the scenes"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
+                    disabled={uploading}
+                  />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Description (place & moment)</label>
-                  <textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Short description..." rows={4} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none" disabled={uploading} />
+                  <label className="text-xs font-semibold text-slate-600">
+                    Description
+                  </label>
+                  <textarea
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                    placeholder="Short description..."
+                    rows={4}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none"
+                    disabled={uploading}
+                  />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Category</label>
-                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white" disabled={uploading}>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Category
+                  </label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+                    disabled={uploading}
+                  >
                     {categoriesPreset.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -660,7 +969,45 @@ const GallerySection = ({ title, subtitle }) => {
                   </select>
                 </div>
 
-                <button type="button" onClick={handleUpload} disabled={uploading} className="w-full py-3 rounded-lg font-semibold transition" style={{ background: accentColor, color: primaryColor }}>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Status
+                  </label>
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+                    disabled={uploading}
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+
+                {uploading && (
+                  <div>
+                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="h-3 transition-all"
+                        style={{
+                          width: `${uploadProgress}%`,
+                          background: primaryColor,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Uploading... {uploadProgress}%
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={uploading}
+                  className="w-full py-3 rounded-lg font-semibold transition disabled:opacity-60"
+                  style={{ background: accentColor, color: primaryColor }}
+                >
                   {uploading ? "Uploading..." : "Upload Photo"}
                 </button>
               </div>
@@ -669,41 +1016,145 @@ const GallerySection = ({ title, subtitle }) => {
         )}
       </AnimatePresence>
 
-      {/* Admin Edit Modal (demo/local mode) */}
       <AnimatePresence>
-        {editOpen && isAdmin && (
-          <motion.div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70" variants={modalBackdrop} initial="hidden" animate="show" exit="exit" onMouseDown={(e) => { if (e.target === e.currentTarget) closeEdit(); }}>
-            <motion.div variants={modalPanel} initial="hidden" animate="show" exit="exit" className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl">
+        {editOpen && currentUser && (
+          <motion.div
+            className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70"
+            variants={modalBackdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeEdit();
+            }}
+          >
+            <motion.div
+              variants={modalPanel}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+              className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl"
+            >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Edit Gallery Item</p>
+                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                    Signed-in User
+                  </p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+                    Edit Gallery Item
+                  </p>
                 </div>
 
-                <button type="button" onClick={closeEdit} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+                  aria-label="Close"
+                >
                   <BsX className="text-2xl" />
                 </button>
               </div>
 
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Caption / Title</label>
-                  <input value={editAlt} onChange={(e) => setEditAlt(e.target.value)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring" disabled={editing} />
+                  <label className="text-xs font-semibold text-slate-600">
+                    Replace Photo
+                  </label>
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePickEditFile}
+                    className="mt-1 w-full text-sm"
+                    disabled={editing}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Leave empty to keep current image.
+                  </p>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Description (place & moment)</label>
-                  <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={4} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none" disabled={editing} />
+                  <label className="text-xs font-semibold text-slate-600">
+                    Caption / Title
+                  </label>
+                  <input
+                    value={editAlt}
+                    onChange={(e) => setEditAlt(e.target.value)}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
+                    disabled={editing}
+                  />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Category</label>
-                  <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white" disabled={editing}>
-                    {categoriesPreset.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <label className="text-xs font-semibold text-slate-600">
+                    Description
+                  </label>
+                  <textarea
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    rows={4}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none"
+                    disabled={editing}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Category
+                  </label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+                    disabled={editing}
+                  >
+                    {categoriesPreset.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                <button type="button" onClick={handleEditSave} disabled={editing} className="w-full py-3 rounded-lg font-semibold transition" style={{ background: primaryColor, color: "#fff" }}>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Status
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+                    disabled={editing}
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+
+                {editing && editFile && (
+                  <div>
+                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="h-3 transition-all"
+                        style={{
+                          width: `${uploadProgress}%`,
+                          background: primaryColor,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Uploading... {uploadProgress}%
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleEditSave}
+                  disabled={editing}
+                  className="w-full py-3 rounded-lg font-semibold transition disabled:opacity-60"
+                  style={{ background: primaryColor, color: "#fff" }}
+                >
                   {editing ? "Saving..." : "Save Changes"}
                 </button>
               </div>
@@ -712,29 +1163,67 @@ const GallerySection = ({ title, subtitle }) => {
         )}
       </AnimatePresence>
 
-      {/* Admin Delete Confirm (demo/local mode) */}
       <AnimatePresence>
-        {deleteOpen && isAdmin && (
-          <motion.div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70" variants={modalBackdrop} initial="hidden" animate="show" exit="exit" onMouseDown={(e) => { if (e.target === e.currentTarget) closeDelete(); }}>
-            <motion.div variants={modalPanel} initial="hidden" animate="show" exit="exit" className="relative w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl">
+        {deleteOpen && currentUser && (
+          <motion.div
+            className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70"
+            variants={modalBackdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeDelete();
+            }}
+          >
+            <motion.div
+              variants={modalPanel}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+              className="relative w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl"
+            >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div>
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">Admin</p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>Delete Photo</p>
+                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                    Signed-in User
+                  </p>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+                    Delete Photo
+                  </p>
                 </div>
 
-                <button type="button" onClick={closeDelete} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
+                <button
+                  type="button"
+                  onClick={closeDelete}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+                  aria-label="Close"
+                >
                   <BsX className="text-2xl" />
                 </button>
               </div>
 
               <div className="p-5 space-y-3">
-                <p className="text-sm text-slate-700">Are you sure you want to delete this photo? This cannot be undone.</p>
+                <p className="text-sm text-slate-700">
+                  Are you sure you want to delete this photo? This cannot be undone.
+                </p>
 
                 <div className="flex gap-3">
-                  <button type="button" onClick={closeDelete} disabled={deleting} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50">Cancel</button>
+                  <button
+                    type="button"
+                    onClick={closeDelete}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
 
-                  <button type="button" onClick={handleDeleteConfirm} disabled={deleting} className="flex-1 py-2 rounded-lg font-semibold text-white" style={{ background: "#dc2626" }}>
+                  <button
+                    type="button"
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-lg font-semibold text-white disabled:opacity-60"
+                    style={{ background: "#dc2626" }}
+                  >
                     {deleting ? "Deleting..." : "Delete"}
                   </button>
                 </div>
@@ -744,32 +1233,80 @@ const GallerySection = ({ title, subtitle }) => {
         )}
       </AnimatePresence>
 
-      {/* Lightbox */}
       <AnimatePresence>
         {activeItem && (
-          <motion.div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70" variants={modalBackdrop} initial="hidden" animate="show" exit="exit" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
-            <motion.div variants={modalPanel} initial="hidden" animate="show" exit="exit" className="relative w-full max-w-4xl bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col">
+          <motion.div
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70"
+            variants={modalBackdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeModal();
+            }}
+          >
+            <motion.div
+              variants={modalPanel}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+              className="relative w-full max-w-4xl bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col"
+            >
               <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-100">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">{activeItem.category || "Media"}</p>
-                  <p className="text-sm sm:text-base font-bold truncate" style={{ color: primaryColor }}>{activeItem.alt || "SHEVET-CITY photo"}</p>
+                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                    {activeItem.category || "Media"}
+                  </p>
+
+                  <p
+                    className="text-sm sm:text-base font-bold truncate"
+                    style={{ color: primaryColor }}
+                  >
+                    {activeItem.alt || activeItem.title || "SHEVET-CITY photo"}
+                  </p>
                 </div>
 
-                <button type="button" onClick={closeModal} className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Close">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+                  aria-label="Close"
+                >
                   <BsX className="text-2xl" />
                 </button>
               </div>
 
               <div className="relative bg-black">
-                <img src={activeItem.src} alt={activeItem.alt || "SHEVET-CITY photo"} className="w-full max-h-[55vh] object-contain" />
+                <img
+                  src={activeItem.src}
+                  alt={activeItem.alt || activeItem.title || "SHEVET-CITY photo"}
+                  className="w-full max-h-[55vh] object-contain"
+                />
 
                 {filtered.length > 1 && (
                   <>
-                    <button type="button" onClick={goPrev} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center" aria-label="Previous image">
-                      <BsChevronLeft className="text-xl" style={{ color: primaryColor }} />
+                    <button
+                      type="button"
+                      onClick={goPrev}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center"
+                      aria-label="Previous image"
+                    >
+                      <BsChevronLeft
+                        className="text-xl"
+                        style={{ color: primaryColor }}
+                      />
                     </button>
-                    <button type="button" onClick={goNext} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center" aria-label="Next image">
-                      <BsChevronRight className="text-xl" style={{ color: primaryColor }} />
+
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center"
+                      aria-label="Next image"
+                    >
+                      <BsChevronRight
+                        className="text-xl"
+                        style={{ color: primaryColor }}
+                      />
                     </button>
                   </>
                 )}
@@ -777,18 +1314,31 @@ const GallerySection = ({ title, subtitle }) => {
 
               <div className="px-4 sm:px-5 py-4 border-t border-slate-100 overflow-y-auto flex-1 min-h-0">
                 {!!activeItem.description ? (
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{activeItem.description}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                    {activeItem.description}
+                  </p>
                 ) : (
-                  <p className="text-sm text-slate-500">No description added yet.</p>
+                  <p className="text-sm text-slate-500">
+                    No description added yet.
+                  </p>
                 )}
 
-                <div className="mt-3 text-xs text-slate-500">{formatTimestamp(activeItem.createdAt, activeItem.createdAtMs)}</div>
+                <div className="mt-3 text-xs text-slate-500">
+                  {formatTimestamp(activeItem.createdAt, activeItem.createdAtMs)}
+                </div>
               </div>
 
               <div className="px-4 sm:px-5 py-3 border-t border-slate-100 flex items-center justify-between">
-                <p className="text-xs text-slate-500">{activeIndex !== null ? activeIndex + 1 : 0} / {filtered.length}</p>
+                <p className="text-xs text-slate-500">
+                  {activeIndex !== null ? activeIndex + 1 : 0} / {filtered.length}
+                </p>
 
-                <button type="button" onClick={closeModal} className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full" style={{ background: primaryColor, color: "#fff" }}>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full"
+                  style={{ background: primaryColor, color: "#fff" }}
+                >
                   Close <BsX />
                 </button>
               </div>
