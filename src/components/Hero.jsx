@@ -588,33 +588,6 @@ const Hero = () => {
               })}
             </nav>
 
-            <div className="hidden md:flex items-center gap-3">
-              {currentUser ? (
-                <>
-                  <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-200 px-3 py-2 rounded-full">
-                    Signed in
-                  </span>
-
-                  <button
-                    onClick={handleLogout}
-                    disabled={authLoading}
-                    className="text-sm font-semibold text-red-600 hover:text-red-700 transition disabled:opacity-70"
-                    type="button"
-                  >
-                    {authLoading ? "Logging out..." : "Logout"}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={openSignIn}
-                  className="text-sm font-semibold text-[#5A005A] hover:text-[#F29A00] transition"
-                  type="button"
-                >
-                  Sign in
-                </button>
-              )}
-            </div>
-
             <button
               className="md:hidden text-[#5A005A] text-2xl"
               onClick={() => setMobileOpen((prev) => !prev)}
