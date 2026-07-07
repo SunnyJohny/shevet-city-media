@@ -335,6 +335,48 @@ const Hero = () => {
     }));
   };
 
+
+  const getFriendlyAuthError = (error, fallbackMessage = "Authentication failed. Please try again.") => {
+    const code = String(error?.code || "").toLowerCase();
+    const message = String(error?.message || "").toLowerCase();
+    const details = `${code} ${message}`;
+
+    if (
+      details.includes("user-not-found") ||
+      details.includes("wrong-password") ||
+      details.includes("invalid-credential") ||
+      details.includes("invalid-login-credentials")
+    ) {
+      return "Invalid email or password. Please check your details and try again.";
+    }
+
+    if (details.includes("invalid-email")) {
+      return "Please enter a valid email address.";
+    }
+
+    if (details.includes("too-many-requests")) {
+      return "Too many attempts. Please wait a moment and try again.";
+    }
+
+    if (details.includes("network-request-failed")) {
+      return "Network error. Please check your internet connection and try again.";
+    }
+
+    if (details.includes("email-already-in-use")) {
+      return "An account with this email already exists. Please sign in instead.";
+    }
+
+    if (details.includes("weak-password")) {
+      return "Password is too weak. Please use a stronger password.";
+    }
+
+    if (details.includes("operation-not-allowed")) {
+      return "This sign-in method is not available right now. Please contact support.";
+    }
+
+    return fallbackMessage;
+  };
+
   const handleSignIn = async (e) => {
     e.preventDefault();
 
@@ -356,7 +398,8 @@ const Hero = () => {
       setSignInPassword("");
       closeAuthModals();
     } catch (error) {
-      toast.error(error.message || "Sign in failed");
+      console.error("Sign in failed:", error);
+      toast.error(getFriendlyAuthError(error, "Sign in failed. Please try again."));
     } finally {
       setAuthLoading(false);
     }
@@ -388,7 +431,8 @@ const Hero = () => {
       setSignUpPassword("");
       closeAuthModals();
     } catch (error) {
-      toast.error(error.message || "Sign up failed");
+      console.error("Sign up failed:", error);
+      toast.error(getFriendlyAuthError(error, "Account creation failed. Please try again."));
     } finally {
       setAuthLoading(false);
     }
@@ -409,7 +453,8 @@ const Hero = () => {
 
       toast.info("Logged out successfully");
     } catch (error) {
-      toast.error(error.message || "Logout failed");
+      console.error("Logout failed:", error);
+      toast.error("Logout failed. Please try again.");
     } finally {
       setAuthLoading(false);
     }
