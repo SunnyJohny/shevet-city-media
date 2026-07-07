@@ -335,7 +335,7 @@ const fallbackTeamMembers = [
   },
 ];
 
-const TeamMemberCard = ({ member, currentUser, onEdit, onDelete }) => {
+const TeamMemberCard = ({ member, currentUser, onEdit, onDelete, onView }) => {
   const imageSrc = member.imageUrl || member.photoUrl || member.src || schoolLogo;
   const skills = Array.isArray(member.skills)
     ? member.skills
@@ -344,13 +344,29 @@ const TeamMemberCard = ({ member, currentUser, onEdit, onDelete }) => {
         .map((x) => x.trim())
         .filter(Boolean);
 
+  const stopAction = (e, action) => {
+    e.stopPropagation();
+    action();
+  };
+
   return (
     <motion.article
       variants={itemVar}
-      className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-500 overflow-hidden flex flex-col"
+      role="button"
+      tabIndex={0}
+      onClick={() => onView(member)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onView(member);
+        }
+      }}
+      className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2"
+      style={{ "--tw-ring-color": primaryColor }}
+      title={`View ${member.name || "team member"} profile`}
     >
-      <div className="flex gap-3 p-3">
-        <div className="relative w-24 h-28 shrink-0 rounded-2xl overflow-hidden bg-slate-100">
+      <div className="p-1.5">
+        <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100">
           <img
             src={imageSrc}
             alt={member.name || "SHEVET-CITY team member"}
@@ -360,57 +376,29 @@ const TeamMemberCard = ({ member, currentUser, onEdit, onDelete }) => {
               e.currentTarget.src = schoolLogo;
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <span
-            className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-extrabold border max-w-full truncate"
-            style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}
-          >
-            {member.department || "Media Team"}
-          </span>
-
-          <h3 className="mt-2 text-sm md:text-base font-extrabold line-clamp-1" style={{ color: primaryColor }}>
-            {member.name || "Team Member"}
-          </h3>
-
-          <p className="text-[11px] md:text-xs text-slate-600 font-semibold line-clamp-1">
-            {member.role || "Media Professional"}
-          </p>
-
-          <p className="mt-2 text-[11px] md:text-xs text-slate-600 leading-relaxed line-clamp-2">
-            {member.bio || "No biography has been added yet."}
-          </p>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-70" />
         </div>
       </div>
 
-      <div className="px-3 pb-3 flex-1 flex flex-col">
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-          <div className="flex items-start gap-2">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 text-sm"
-              style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}
-            >
-              <BsBriefcase />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-extrabold line-clamp-1" style={{ color: primaryColor }}>
-                {member.portfolioTitle || "Portfolio"}
-              </p>
-              <p className="mt-1 text-[11px] text-slate-600 leading-relaxed line-clamp-3">
-                {member.portfolioSummary || "Portfolio details will appear here."}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="px-2 pb-2 text-center">
+        <h3 className="text-[11px] sm:text-xs md:text-sm font-extrabold line-clamp-1" style={{ color: primaryColor }}>
+          {member.name || "Team Member"}
+        </h3>
+
+        <p className="mt-0.5 text-[9px] sm:text-[10px] md:text-[11px] text-slate-600 font-semibold line-clamp-1">
+          {member.role || "Media Professional"}
+        </p>
+
+        <p className="mt-0.5 text-[9px] sm:text-[10px] text-slate-500 line-clamp-1">
+          {member.department || "Media Team"}
+        </p>
 
         {skills.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {skills.slice(0, 3).map((skill) => (
+          <div className="mt-1 hidden sm:flex flex-wrap justify-center gap-1">
+            {skills.slice(0, 1).map((skill) => (
               <span
                 key={skill}
-                className="px-2.5 py-1 rounded-full text-[10px] font-semibold border"
+                className="px-1.5 py-0.5 rounded-full text-[8px] md:text-[9px] font-semibold border max-w-full truncate"
                 style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}
               >
                 {skill}
@@ -419,53 +407,28 @@ const TeamMemberCard = ({ member, currentUser, onEdit, onDelete }) => {
           </div>
         )}
 
-        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2 text-[11px] text-slate-600">
-          {member.email && (
-            <a href={`mailto:${member.email}`} className="inline-flex items-center gap-1 hover:underline" style={{ color: primaryColor }}>
-              <BsEnvelope /> Email
-            </a>
-          )}
-          {member.website && (
-            <a href={cleanUrl(member.website)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline" style={{ color: primaryColor }}>
-              <BsGlobe2 /> Portfolio
-            </a>
-          )}
-          {member.instagram && (
-            <a href={cleanUrl(member.instagram)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline" style={{ color: primaryColor }}>
-              <BsInstagram /> Instagram
-            </a>
-          )}
-          {member.linkedin && (
-            <a href={cleanUrl(member.linkedin)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline" style={{ color: primaryColor }}>
-              <BsLinkedin /> LinkedIn
-            </a>
-          )}
-        </div>
+        <p className="mt-1 text-[9px] sm:text-[10px] font-semibold" style={{ color: accentColor }}>
+          View profile
+        </p>
 
         {currentUser && !member.isFallback && (
-          <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
+          <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 gap-1">
             <button
               type="button"
-              onClick={() => onEdit(member)}
-              className="inline-flex items-center justify-center gap-2 py-2 rounded-xl border border-slate-200 font-semibold text-[11px] hover:bg-slate-50"
+              onClick={(e) => stopAction(e, () => onEdit(member))}
+              className="inline-flex items-center justify-center gap-1 py-1.5 rounded-lg border border-slate-200 font-semibold text-[9px] hover:bg-slate-50"
               style={{ color: primaryColor }}
             >
               <BsPencilSquare /> Edit
             </button>
             <button
               type="button"
-              onClick={() => onDelete(member)}
-              className="inline-flex items-center justify-center gap-2 py-2 rounded-xl border border-slate-200 font-semibold text-[11px] hover:bg-red-50"
+              onClick={(e) => stopAction(e, () => onDelete(member))}
+              className="inline-flex items-center justify-center gap-1 py-1.5 rounded-lg border border-slate-200 font-semibold text-[9px] hover:bg-red-50"
             >
               <BsTrash style={{ color: "#dc2626" }} /> Delete
             </button>
           </div>
-        )}
-
-        {currentUser && member.isFallback && (
-          <p className="mt-3 text-[10px] text-slate-400 italic">
-            Fallback profile. Add this person as a real team member before editing.
-          </p>
         )}
       </div>
     </motion.article>
@@ -732,6 +695,168 @@ const TeamForm = ({
   );
 };
 
+const TeamProfileModal = ({ member, onClose }) => {
+  if (!member) return null;
+
+  const imageSrc = member.imageUrl || member.photoUrl || member.src || schoolLogo;
+  const skills = Array.isArray(member.skills)
+    ? member.skills
+    : String(member.skills || "")
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70"
+      variants={modalBackdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <motion.div
+        variants={modalPanel}
+        initial="hidden"
+        animate="show"
+        exit="exit"
+        className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+              Meet the Team
+            </p>
+            <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+              {member.name || "Team Member"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+            aria-label="Close"
+          >
+            <BsX className="text-2xl" />
+          </button>
+        </div>
+
+        <div className="grid gap-0 md:grid-cols-5">
+          <div className="md:col-span-2 bg-slate-50 p-5">
+            <div className="rounded-3xl overflow-hidden border border-slate-100 bg-white shadow-sm">
+              <img
+                src={imageSrc}
+                alt={member.name || "SHEVET-CITY team member"}
+                className="w-full h-72 md:h-[420px] object-cover object-top"
+                onError={(e) => {
+                  e.currentTarget.src = schoolLogo;
+                }}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span
+                className="px-3 py-1.5 rounded-full text-xs font-extrabold border"
+                style={{ background: pillLightBg, color: primaryColor, borderColor: pillLightBorder }}
+              >
+                {member.department || "Media Team"}
+              </span>
+              {member.status && (
+                <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 text-slate-500 bg-white">
+                  {member.status}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="md:col-span-3 p-5 md:p-7">
+            <h3 className="text-2xl md:text-3xl font-extrabold leading-tight" style={{ color: primaryColor }}>
+              {member.name || "Team Member"}
+            </h3>
+
+            <p className="mt-1 text-sm md:text-base font-semibold" style={{ color: accentColor }}>
+              {member.role || "Media Professional"}
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                Profile
+              </p>
+              <p className="mt-2 text-sm md:text-base text-slate-700 leading-relaxed">
+                {member.bio || "This team member profile will be updated soon."}
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0"
+                  style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}
+                >
+                  <BsBriefcase />
+                </div>
+                <div>
+                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+                    {member.portfolioTitle || "Portfolio"}
+                  </p>
+                  <p className="mt-2 text-sm md:text-base text-slate-700 leading-relaxed">
+                    {member.portfolioSummary || "Portfolio details will be added soon."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {skills.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                  Skills & Specialties
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold border"
+                      style={{ background: "#FFF6E6", color: accentColor, borderColor: "#FFEDD5" }}
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-3 text-sm">
+              {member.email && (
+                <a href={`mailto:${member.email}`} className="inline-flex items-center gap-2 font-semibold hover:underline" style={{ color: primaryColor }}>
+                  <BsEnvelope /> Email
+                </a>
+              )}
+              {member.website && (
+                <a href={cleanUrl(member.website)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold hover:underline" style={{ color: primaryColor }}>
+                  <BsGlobe2 /> Portfolio
+                </a>
+              )}
+              {member.instagram && (
+                <a href={cleanUrl(member.instagram)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold hover:underline" style={{ color: primaryColor }}>
+                  <BsInstagram /> Instagram
+                </a>
+              )}
+              {member.linkedin && (
+                <a href={cleanUrl(member.linkedin)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold hover:underline" style={{ color: primaryColor }}>
+                  <BsLinkedin /> LinkedIn
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const AboutUs = ({
   organizationName = "SHEVET-CITY Communications",
   tagline = "Amplifying stories & ideas",
@@ -761,6 +886,7 @@ const AboutUs = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedMember, setSelectedMember] = useState(null);
 
   const breadcrumbs = useMemo(() => ["Home", "About us"], []);
 
@@ -827,11 +953,12 @@ const AboutUs = ({
   }, [teamMembers, activeDept]);
 
   const visibleTeam = useMemo(() => {
+    if (!currentUser) return filteredTeam;
     return filteredTeam.slice(0, visibleCount);
-  }, [filteredTeam, visibleCount]);
+  }, [filteredTeam, visibleCount, currentUser]);
 
-  const hasMore = filteredTeam.length > visibleCount;
-  const canShowLess = visibleCount > INITIAL_VISIBLE_COUNT;
+  const hasMore = currentUser && filteredTeam.length > visibleCount;
+  const canShowLess = currentUser && visibleCount > INITIAL_VISIBLE_COUNT;
 
   useEffect(() => {
     setVisibleCount(INITIAL_VISIBLE_COUNT);
@@ -1207,11 +1334,7 @@ const AboutUs = ({
                 <BsPlusCircle className="text-base" />
                 Add Team Member
               </button>
-            ) : (
-              <div className="text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-4 py-2">
-                Sign in to add or manage team profiles.
-              </div>
-            )}
+            ) : null}
           </div>
         </motion.div>
 
@@ -1234,10 +1357,10 @@ const AboutUs = ({
                     Media Team
                   </p>
                   <h3 className="text-xl md:text-2xl font-extrabold leading-tight" style={{ color: primaryColor }}>
-                    Team portfolio cards
+                    Meet our media team
                   </h3>
                   <p className="mt-2 text-xs md:text-sm text-slate-600 leading-relaxed">
-                    Staff profiles, roles, departments, portfolio summaries, skills and links are managed here by signed-in users.
+                    Meet the talented people behind SHEVET-CITY — the storytellers, producers, creatives and media professionals bringing every idea to life.
                   </p>
                 </div>
 
@@ -1246,7 +1369,7 @@ const AboutUs = ({
                   {teamError && <p className="text-xs font-semibold text-red-600 max-w-[220px] sm:text-right">{teamError}</p>}
                   {currentUser && (
                     <p className="text-[11px] font-semibold" style={{ color: primaryColor }}>
-                      CRUD mode active
+                      Admin editing mode
                     </p>
                   )}
                 </div>
@@ -1289,7 +1412,7 @@ const AboutUs = ({
                 variants={container}
                 initial="hidden"
                 animate={!teamLoading ? "show" : "hidden"}
-                className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"
+                className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-2 xl:grid-cols-3"
               >
                 {visibleTeam.map((member) => (
                   <TeamMemberCard
@@ -1298,11 +1421,12 @@ const AboutUs = ({
                     currentUser={currentUser}
                     onEdit={openEdit}
                     onDelete={openDelete}
+                    onView={setSelectedMember}
                   />
                 ))}
               </motion.div>
 
-              {!teamLoading && filteredTeam.length > INITIAL_VISIBLE_COUNT && (
+              {currentUser && !teamLoading && filteredTeam.length > INITIAL_VISIBLE_COUNT && (
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                   {hasMore && (
                     <button
@@ -1332,7 +1456,7 @@ const AboutUs = ({
 
               {!teamLoading && filteredTeam.length === 0 && (
                 <div className="rounded-2xl bg-white border border-slate-100 p-5 text-center text-sm text-slate-600">
-                  No team profiles yet. {currentUser ? "Click “Add Team Member” to create one." : "Sign in to add team profiles."}
+                  No team profiles yet. {currentUser ? "Click “Add Team Member” to create one." : "Please check back soon to meet our team."}
                 </div>
               )}
             </div>
@@ -1580,6 +1704,15 @@ const AboutUs = ({
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedMember && (
+          <TeamProfileModal
+            member={selectedMember}
+            onClose={() => setSelectedMember(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {addOpen && currentUser && (
