@@ -19,7 +19,7 @@ const WHATSAPP_NUMBER = "2348033353059";
 const WHATSAPP_MESSAGE =
   "Hello SHEVET-CITY, I would like to make an enquiry about your services.";
 const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-  WHATSAPP_MESSAGE
+  WHATSAPP_MESSAGE,
 )}`;
 
 const DEFAULT_FALLBACK = [
@@ -60,54 +60,79 @@ const HARDCODED_NEWS = [
 const NAV_DATA = [
   { label: "Home", to: "home" },
   {
-    label: "Culture & Entertainment",
-    to: "culture",
+    label: "Explore",
     children: [
-      { label: "Sports", to: "culture-sports" },
-      { label: "Movies", to: "culture-movies" },
-      { label: "Documentaries", to: "culture-documentaries" },
-      { label: "Music", to: "culture-music" },
-      { label: "Shows & podcasts", to: "culture-shows-podcasts" },
-      { label: "Arts & crafts", to: "culture-arts-crafts" },
-      { label: "Festivals", to: "culture-festivals" },
+      {
+        label: "Culture & Entertainment",
+        children: [
+          { label: "Overview", to: "culture" },
+          { label: "Sports", to: "culture-sports" },
+          { label: "Movies", to: "culture-movies" },
+          { label: "Documentaries", to: "culture-documentaries" },
+          { label: "Music", to: "culture-music" },
+          { label: "Shows & podcasts", to: "culture-shows-podcasts" },
+          { label: "Arts & crafts", to: "culture-arts-crafts" },
+          { label: "Festivals", to: "culture-festivals" },
+        ],
+      },
+      {
+        label: "Lifestyle",
+        children: [
+          { label: "Overview", to: "lifestyle" },
+          { label: "Travels", to: "lifestyle-travels" },
+          { label: "Food & hospitality", to: "lifestyle-food" },
+          { label: "Fashion", to: "lifestyle-fashion" },
+          { label: "Homes and gardens", to: "lifestyle-homes" },
+        ],
+      },
     ],
   },
   {
-    label: "Lifestyle",
-    to: "lifestyle",
+    label: "Publications",
+    flyoutSide: "left",
     children: [
-      { label: "Travels", to: "lifestyle-travels" },
-      { label: "Food & hospitality", to: "lifestyle-food" },
-      { label: "Fashion", to: "lifestyle-fashion" },
-      { label: "Homes and gardens", to: "lifestyle-homes" },
+      {
+        label: "Magazine",
+        children: [
+          { label: "Overview", to: "magazine" },
+          { label: "The Legend", to: "magazine-legend" },
+          { label: "The Mentor", to: "magazine-mentor" },
+          { label: "The Market Place", to: "magazine-marketplace" },
+        ],
+      },
+      {
+        label: "News",
+        children: [
+          { label: "Headlines", to: "news" },
+          { label: "Archives", to: "news-archives" },
+          { label: "Inspiration", to: "news-inspiration" },
+        ],
+      },
     ],
   },
   {
-    label: "Magazine",
-    to: "magazine",
+    label: "Media & Store",
+    dropdownAlign: "right",
+    flyoutSide: "left",
     children: [
-      { label: "The Legend", to: "magazine-legend" },
-      { label: "The Mentor", to: "magazine-mentor" },
-      { label: "The Market Place", to: "magazine-marketplace" },
+      { label: "Gallery", to: "gallery" },
+      {
+        label: "Shop",
+        children: [
+          { label: "Shop Overview", to: "shop" },
+          { label: "Goods", to: "shop-goods" },
+        ],
+      },
     ],
   },
   {
-    label: "News",
-    to: "news",
+    label: "Company",
+    dropdownAlign: "right",
     children: [
-      { label: "Headlines", to: "news" },
-      { label: "Archives", to: "news-archives" },
-      { label: "Inspiration", to: "news-inspiration" },
+      { label: "About", to: "about" },
+      { label: "Contact", to: "contact" },
     ],
   },
-  {
-    label: "Shop",
-    to: "shop",
-    children: [{ label: "Goods", to: "shop-goods" }],
-  },
-  { label: "Gallery", to: "gallery" },
-  { label: "About", to: "about" },
-  { label: "Contact", to: "contact" },
 ];
 
 const Hero = () => {
@@ -129,6 +154,7 @@ const Hero = () => {
   const [authLoading, setAuthLoading] = useState(false);
 
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [openSubDropdown, setOpenSubDropdown] = useState(null);
   const [pinnedDropdown, setPinnedDropdown] = useState(null);
   const [mobileExpanded, setMobileExpanded] = useState({});
 
@@ -198,6 +224,7 @@ const Hero = () => {
     const onKey = (e) => {
       if (e.key === "Escape") {
         setOpenDropdown(null);
+        setOpenSubDropdown(null);
         setPinnedDropdown(null);
         closeAuthModals();
       }
@@ -208,6 +235,7 @@ const Hero = () => {
 
       if (!desktopNavRef.current.contains(e.target)) {
         setOpenDropdown(null);
+        setOpenSubDropdown(null);
         setPinnedDropdown(null);
       }
     };
@@ -304,6 +332,7 @@ const Hero = () => {
       closeTimeout.current = null;
     }
 
+    if (openDropdown !== label) setOpenSubDropdown(null);
     setOpenDropdown(label);
   };
 
@@ -314,6 +343,7 @@ const Hero = () => {
 
     closeTimeout.current = setTimeout(() => {
       setOpenDropdown((prev) => (prev === label ? null : prev));
+      setOpenSubDropdown(null);
       closeTimeout.current = null;
     }, 150);
   };
@@ -322,10 +352,21 @@ const Hero = () => {
     if (pinnedDropdown === label) {
       setPinnedDropdown(null);
       setOpenDropdown(null);
+      setOpenSubDropdown(null);
     } else {
       setPinnedDropdown(label);
       setOpenDropdown(label);
+      setOpenSubDropdown(null);
     }
+  };
+
+  const getSubmenuKey = (parentLabel, childLabel) =>
+    `${parentLabel}::${childLabel}`;
+
+  const toggleDesktopSubDropdown = (submenuKey) => {
+    setOpenSubDropdown((previous) =>
+      previous === submenuKey ? null : submenuKey,
+    );
   };
 
   const toggleMobileParent = (label) => {
@@ -335,8 +376,10 @@ const Hero = () => {
     }));
   };
 
-
-  const getFriendlyAuthError = (error, fallbackMessage = "Authentication failed. Please try again.") => {
+  const getFriendlyAuthError = (
+    error,
+    fallbackMessage = "Authentication failed. Please try again.",
+  ) => {
     const code = String(error?.code || "").toLowerCase();
     const message = String(error?.message || "").toLowerCase();
     const details = `${code} ${message}`;
@@ -399,7 +442,9 @@ const Hero = () => {
       closeAuthModals();
     } catch (error) {
       console.error("Sign in failed:", error);
-      toast.error(getFriendlyAuthError(error, "Sign in failed. Please try again."));
+      toast.error(
+        getFriendlyAuthError(error, "Sign in failed. Please try again."),
+      );
     } finally {
       setAuthLoading(false);
     }
@@ -432,7 +477,12 @@ const Hero = () => {
       closeAuthModals();
     } catch (error) {
       console.error("Sign up failed:", error);
-      toast.error(getFriendlyAuthError(error, "Account creation failed. Please try again."));
+      toast.error(
+        getFriendlyAuthError(
+          error,
+          "Account creation failed. Please try again.",
+        ),
+      );
     } finally {
       setAuthLoading(false);
     }
@@ -542,7 +592,7 @@ const Hero = () => {
 
             <nav
               ref={desktopNavRef}
-              className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#5A005A] relative"
+              className="hidden lg:flex items-center gap-7 text-sm font-semibold text-[#5A005A] relative"
               aria-label="Primary"
             >
               {NAV_DATA.map((item) => {
@@ -601,31 +651,120 @@ const Hero = () => {
                       role="menu"
                       aria-label={`${item.label} submenu`}
                       className={[
-                        "absolute left-0 mt-2 w-56 bg-white border border-[#f1e0f1] shadow-lg rounded-md overflow-hidden z-50",
+                        "absolute mt-2 w-64 bg-white border border-[#f1e0f1] shadow-lg rounded-md overflow-visible z-50",
+                        item.dropdownAlign === "right" ? "right-0" : "left-0",
                         openDropdown === item.label ? "block" : "hidden",
                       ].join(" ")}
                       onMouseEnter={() => openDropdownFor(item.label)}
                       onMouseLeave={() => scheduleCloseDropdown(item.label)}
                     >
                       <ul className="flex flex-col">
-                        {item.children.map((child) => (
-                          <li key={child.label}>
-                            <ScrollLink
-                              to={child.to}
-                              spy={true}
-                              smooth={true}
-                              offset={-120}
-                              duration={500}
-                              className="block px-4 py-2 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
-                              onClick={() => {
-                                setOpenDropdown(null);
-                                setPinnedDropdown(null);
-                              }}
+                        {item.children.map((child) => {
+                          const childHasChildren =
+                            Array.isArray(child.children) &&
+                            child.children.length > 0;
+                          const submenuKey = getSubmenuKey(
+                            item.label,
+                            child.label,
+                          );
+
+                          if (!childHasChildren) {
+                            return (
+                              <li key={child.label}>
+                                <ScrollLink
+                                  to={child.to}
+                                  spy={true}
+                                  smooth={true}
+                                  offset={-120}
+                                  duration={500}
+                                  className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
+                                  onClick={() => {
+                                    setOpenDropdown(null);
+                                    setOpenSubDropdown(null);
+                                    setPinnedDropdown(null);
+                                  }}
+                                >
+                                  {child.label}
+                                </ScrollLink>
+                              </li>
+                            );
+                          }
+
+                          return (
+                            <li
+                              key={child.label}
+                              className="relative"
+                              onMouseEnter={() =>
+                                setOpenSubDropdown(submenuKey)
+                              }
+                              onMouseLeave={() =>
+                                setOpenSubDropdown((previous) =>
+                                  previous === submenuKey ? null : previous,
+                                )
+                              }
                             >
-                              {child.label}
-                            </ScrollLink>
-                          </li>
-                        ))}
+                              <button
+                                type="button"
+                                className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A]"
+                                aria-haspopup="true"
+                                aria-expanded={openSubDropdown === submenuKey}
+                                onClick={() =>
+                                  toggleDesktopSubDropdown(submenuKey)
+                                }
+                              >
+                                <span>{child.label}</span>
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M7.21 5.23a.75.75 0 011.06.02l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.06-1.06L10.94 10 7.21 6.29a.75.75 0 010-1.06z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+
+                              <div
+                                role="menu"
+                                aria-label={`${child.label} submenu`}
+                                className={[
+                                  "absolute top-0 w-60 bg-white border border-[#f1e0f1] shadow-lg rounded-md overflow-hidden z-[60]",
+                                  item.flyoutSide === "left"
+                                    ? "right-full mr-1"
+                                    : "left-full ml-1",
+                                  openSubDropdown === submenuKey
+                                    ? "block"
+                                    : "hidden",
+                                ].join(" ")}
+                              >
+                                <ul className="flex flex-col">
+                                  {child.children.map((grandchild) => (
+                                    <li key={grandchild.label}>
+                                      <ScrollLink
+                                        to={grandchild.to}
+                                        spy={true}
+                                        smooth={true}
+                                        offset={-120}
+                                        duration={500}
+                                        className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
+                                        onClick={() => {
+                                          setOpenDropdown(null);
+                                          setOpenSubDropdown(null);
+                                          setPinnedDropdown(null);
+                                        }}
+                                      >
+                                        {grandchild.label}
+                                      </ScrollLink>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   </div>
@@ -634,7 +773,7 @@ const Hero = () => {
             </nav>
 
             <button
-              className="md:hidden text-[#5A005A] text-2xl"
+              className="lg:hidden text-[#5A005A] text-2xl"
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-label="Toggle navigation"
               type="button"
@@ -644,7 +783,7 @@ const Hero = () => {
           </div>
 
           {mobileOpen && (
-            <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-100">
+            <div className="lg:hidden absolute top-full left-0 w-full bg-white shadow-lg z-50 border-t border-gray-100">
               <nav className="flex flex-col py-3 px-4 text-sm font-semibold text-[#5A005A]">
                 {NAV_DATA.map((item) => {
                   const hasChildren =
@@ -696,20 +835,83 @@ const Hero = () => {
 
                       {mobileExpanded[item.label] && (
                         <div id={`mobile-${item.label}`} className="pl-4 pb-2">
-                          {item.children.map((child) => (
-                            <ScrollLink
-                              key={child.label}
-                              to={child.to}
-                              spy={true}
-                              smooth={true}
-                              offset={-120}
-                              duration={500}
-                              onClick={closeMobile}
-                              className="block py-2 text-sm text-slate-700 hover:text-[#5A005A] cursor-pointer"
-                            >
-                              {child.label}
-                            </ScrollLink>
-                          ))}
+                          {item.children.map((child) => {
+                            const childHasChildren =
+                              Array.isArray(child.children) &&
+                              child.children.length > 0;
+                            const submenuKey = getSubmenuKey(
+                              item.label,
+                              child.label,
+                            );
+
+                            if (!childHasChildren) {
+                              return (
+                                <ScrollLink
+                                  key={child.label}
+                                  to={child.to}
+                                  spy={true}
+                                  smooth={true}
+                                  offset={-120}
+                                  duration={500}
+                                  onClick={closeMobile}
+                                  className="block py-2 text-sm text-slate-700 hover:text-[#5A005A] cursor-pointer"
+                                >
+                                  {child.label}
+                                </ScrollLink>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={child.label}
+                                className="border-t border-gray-100 first:border-t-0"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleMobileParent(submenuKey)}
+                                  className="w-full py-2 text-left flex items-center justify-between gap-2 text-sm text-slate-700 hover:text-[#5A005A]"
+                                  aria-expanded={!!mobileExpanded[submenuKey]}
+                                >
+                                  <span>{child.label}</span>
+                                  <svg
+                                    className={`w-3 h-3 transition-transform ${
+                                      mobileExpanded[submenuKey]
+                                        ? "rotate-180"
+                                        : ""
+                                    }`}
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.25 8.27a.75.75 0 01-.02-1.06z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </button>
+
+                                {mobileExpanded[submenuKey] && (
+                                  <div className="pl-4 pb-1 border-l-2 border-[#F3E6F3]">
+                                    {child.children.map((grandchild) => (
+                                      <ScrollLink
+                                        key={grandchild.label}
+                                        to={grandchild.to}
+                                        spy={true}
+                                        smooth={true}
+                                        offset={-120}
+                                        duration={500}
+                                        onClick={closeMobile}
+                                        className="block py-2 text-sm font-medium text-slate-600 hover:text-[#5A005A] cursor-pointer"
+                                      >
+                                        {grandchild.label}
+                                      </ScrollLink>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

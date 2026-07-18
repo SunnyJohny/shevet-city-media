@@ -1,12 +1,14 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BsArrowRight,
-  BsX,
-  BsPlusCircle,
-  BsPencilSquare,
-  BsTrash,
+  BsCalendarEvent,
   BsImage,
+  BsNewspaper,
+  BsPencilSquare,
+  BsPlusCircle,
+  BsTrash,
+  BsX,
 } from "react-icons/bs";
 import { toast } from "react-toastify";
 import {
@@ -20,28 +22,35 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+
 import { db } from "../firebase";
 import { useMyContext } from "../Context/MyContext";
 
 const SHEVET_CITY_ID = "the-shevet-city";
+const INITIAL_VISIBLE_COUNT = 6;
+const LOAD_MORE_COUNT = 6;
 
-const containerVariants = {
-  hidden: { opacity: 0, y: 40 },
-  visible: {
+const container = {
+  hidden: { opacity: 0, y: 22 },
+  show: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.5,
+      duration: 0.45,
       ease: "easeOut",
       when: "beforeChildren",
-      staggerChildren: 0.12,
+      staggerChildren: 0.08,
     },
   },
 };
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 25 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45 } },
+const itemVar = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: "easeOut" },
+  },
 };
 
 const modalBackdrop = {
@@ -66,10 +75,12 @@ const modalPanel = {
   },
 };
 
-const getUniqueCategories = (items) => {
-  const cats = new Set((items || []).map((i) => i.category).filter(Boolean));
-  return ["All", ...Array.from(cats)];
-};
+const primaryColor = "#5A005A";
+const primaryDark = "#6A006A";
+const accentColor = "#F29A00";
+const accentHover = "#FFA500";
+const pillLightBg = "#F7EEF7";
+const pillLightBorder = "#EAD9EA";
 
 const categoriesPreset = [
   "General",
@@ -86,33 +97,23 @@ const categoriesPreset = [
   "Documentaries",
 ];
 
-const formatDate = (val, createdAtMs) => {
-  try {
-    if (val?.toDate) return val.toDate().toLocaleDateString();
-    if (val instanceof Date) return val.toLocaleDateString();
-    if (typeof val === "string") return val;
-    if (typeof createdAtMs === "number" && createdAtMs > 0) {
-      return new Date(createdAtMs).toLocaleDateString();
-    }
-    return "";
-  } catch {
-    return "";
-  }
+const getUserDisplayName = (user) => {
+  return user?.displayName || user?.email?.split("@")[0] || "User";
 };
 
 const serializeDoc = (snap) => {
-  const raw = snap.data() || {};
+  const data = snap.data() || {};
   let createdAtMs = 0;
 
-  if (typeof raw.createdAtMs === "number" && raw.createdAtMs > 0) {
-    createdAtMs = raw.createdAtMs;
-  } else if (raw.createdAt?.toDate) {
-    createdAtMs = raw.createdAt.toDate().getTime();
+  if (typeof data.createdAtMs === "number" && data.createdAtMs > 0) {
+    createdAtMs = data.createdAtMs;
+  } else if (data.createdAt?.toDate) {
+    createdAtMs = data.createdAt.toDate().getTime();
   }
 
   return {
     id: snap.id,
-    ...raw,
+    ...data,
     createdAtMs,
   };
 };
@@ -125,79 +126,622 @@ const sortByCreatedDesc = (items = []) => {
   });
 };
 
-const HARDCODED_NEWS = [
+const getUniqueCategories = (items) => {
+  const categories = new Set(
+    (items || []).map((item) => item.category).filter(Boolean),
+  );
+
+  return ["All", ...Array.from(categories)];
+};
+
+const formatTimestamp = (timestamp, createdAtMs) => {
+  try {
+    const date = timestamp?.toDate
+      ? timestamp.toDate()
+      : timestamp instanceof Date
+        ? timestamp
+        : null;
+
+    if (date) return date.toLocaleString();
+
+    if (typeof createdAtMs === "number" && createdAtMs > 0) {
+      return new Date(createdAtMs).toLocaleString();
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+const emptyForm = {
+  title: "",
+  category: "General",
+  highlight: "",
+  content: "",
+  status: "published",
+};
+
+const fallbackNews = [
   {
-    id: "hc-1",
+    id: "fallback-news-1",
     title: "SHEVET-CITY Launches New Podcast Series",
     category: "Events",
-    highlight: "Behind the scenes conversations with local creators.",
+    highlight: "Behind-the-scenes conversations with local creators.",
     content:
-      "SHEVET-CITY Media is proud to announce a new weekly podcast where we interview filmmakers, journalists, and creatives from the community. Episodes drop every Monday and will cover storytelling, production tips, and career journeys.",
+      "SHEVET-CITY Media is proud to announce a new weekly podcast featuring filmmakers, journalists and creatives from the community. Episodes will explore storytelling, production skills and career journeys.",
     imageUrl: "",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 24 * 7,
+    status: "published",
+    createdAtMs: 3,
     createdAt: null,
     isFallback: true,
   },
   {
-    id: "hc-2",
+    id: "fallback-news-2",
     title: "Photo Feature: Community Arts Day",
-    category: "Events",
-    highlight: "A day of murals, music, and collaborative art.",
+    category: "Culture",
+    highlight: "A day of murals, music and collaborative art.",
     content:
-      "Our photographers captured inspiring moments from Community Arts Day — families painting murals, youth performances, and live installations. View the full gallery in the Gallery section.",
+      "Our photographers captured memorable moments from Community Arts Day, including family mural sessions, youth performances and live creative installations.",
     imageUrl: "",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 24 * 3,
+    status: "published",
+    createdAtMs: 2,
     createdAt: null,
     isFallback: true,
   },
   {
-    id: "hc-3",
+    id: "fallback-news-3",
     title: "Call for Contributors: Local Editorials",
-    category: "General",
-    highlight: "We want to hear your voice.",
+    category: "News",
+    highlight: "SHEVET-CITY wants to hear your voice.",
     content:
-      "SHEVET-CITY is opening submissions for local editorial pieces. If you're a writer or commentator with a perspective on culture, society, or media, submit a 600–1,200 word piece to editorial@shevecitymedia.com.",
+      "Writers and commentators are invited to contribute thoughtful editorial pieces on culture, society, media, development and public-interest issues.",
     imageUrl: "",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 24,
+    status: "published",
+    createdAtMs: 1,
     createdAt: null,
     isFallback: true,
   },
 ];
 
+const NewsCard = ({
+  item,
+  currentUser,
+  onEdit,
+  onDelete,
+  onView,
+}) => {
+  const imageUrl = item.imageUrl || item.mediaUrl || "";
+
+  const stopAction = (event, action) => {
+    event.stopPropagation();
+    action();
+  };
+
+  return (
+    <motion.article
+      variants={itemVar}
+      role="button"
+      tabIndex={0}
+      onClick={() => onView(item)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onView(item);
+        }
+      }}
+      className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2"
+      style={{ "--tw-ring-color": primaryColor }}
+      title={`Read ${item.title || "news article"}`}
+    >
+      <div className="p-1.5">
+        <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={item.title || "SHEVET-CITY news"}
+              loading="lazy"
+              className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
+            />
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ background: pillLightBg }}
+            >
+              <div className="text-center px-4">
+                <BsNewspaper
+                  className="text-4xl mx-auto"
+                  style={{ color: primaryColor }}
+                />
+                <p
+                  className="mt-2 text-xs font-extrabold"
+                  style={{ color: primaryColor }}
+                >
+                  SHEVET-CITY News
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-60" />
+        </div>
+      </div>
+
+      <div className="px-2 pb-2 text-center flex flex-col flex-1">
+        <h3
+          className="text-[11px] sm:text-xs md:text-sm font-extrabold line-clamp-2"
+          style={{ color: primaryColor }}
+        >
+          {item.title || "News Update"}
+        </h3>
+
+        <p className="mt-0.5 text-[9px] sm:text-[10px] md:text-[11px] text-slate-600 font-semibold line-clamp-1">
+          {item.highlight || "Latest SHEVET-CITY update"}
+        </p>
+
+        <p className="mt-0.5 text-[9px] sm:text-[10px] text-slate-500 line-clamp-1">
+          {item.category || "General"}
+        </p>
+
+        <div className="mt-1 hidden sm:flex flex-wrap justify-center gap-1">
+          <span
+            className="px-1.5 py-0.5 rounded-full text-[8px] md:text-[9px] font-semibold border max-w-full truncate"
+            style={{
+              background: "#FFF6E6",
+              color: accentColor,
+              borderColor: "#FFEDD5",
+            }}
+          >
+            {item.status || "published"}
+          </span>
+        </div>
+
+        <p
+          className="mt-1 text-[9px] sm:text-[10px] font-semibold"
+          style={{ color: accentColor }}
+        >
+          Read article
+        </p>
+
+        {currentUser && !item.isFallback && (
+          <div className="mt-auto pt-2 border-t border-slate-100 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={(event) =>
+                stopAction(event, () => onEdit(item))
+              }
+              className="inline-flex items-center justify-center gap-1 py-1.5 rounded-lg border border-slate-200 font-semibold text-[9px] hover:bg-slate-50"
+              style={{ color: primaryColor }}
+            >
+              <BsPencilSquare /> Edit
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) =>
+                stopAction(event, () => onDelete(item))
+              }
+              className="inline-flex items-center justify-center gap-1 py-1.5 rounded-lg border border-slate-200 font-semibold text-[9px] hover:bg-red-50"
+            >
+              <BsTrash style={{ color: "#dc2626" }} /> Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </motion.article>
+  );
+};
+
+const NewsForm = ({
+  title,
+  fileInputRef,
+  form,
+  setForm,
+  file,
+  existingImageUrl,
+  uploading,
+  uploadProgress,
+  onPickFile,
+  onRemoveExistingImage,
+  onClose,
+  onSubmit,
+  submitLabel,
+  fileLabel = "News Image",
+  fileHelp = "Optional. JPG/PNG recommended. Max 10MB.",
+}) => {
+  const updateField = (field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
+
+  return (
+    <motion.div
+      variants={modalPanel}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      className="relative w-full max-w-3xl bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto"
+    >
+      <div className="sticky top-0 bg-white z-10 flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+            Signed-in User
+          </p>
+
+          <p
+            className="text-base font-extrabold"
+            style={{ color: primaryColor }}
+          >
+            {title}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+          aria-label="Close"
+        >
+          <BsX className="text-2xl" />
+        </button>
+      </div>
+
+      <div className="p-5 grid gap-4 md:grid-cols-2">
+        {existingImageUrl && (
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-slate-600">
+              Current Image
+            </label>
+
+            <img
+              src={existingImageUrl}
+              alt="Current news"
+              className="mt-2 w-full h-52 object-cover rounded-2xl border border-slate-100"
+            />
+
+            {onRemoveExistingImage && (
+              <button
+                type="button"
+                onClick={onRemoveExistingImage}
+                disabled={uploading}
+                className="mt-2 text-xs font-semibold text-red-600"
+              >
+                Remove current image
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="md:col-span-2">
+          <label className="text-xs font-semibold text-slate-600">
+            {fileLabel}
+          </label>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onPickFile}
+            className="mt-1 w-full text-sm"
+            disabled={uploading}
+          />
+
+          <p className="mt-1 text-[11px] text-slate-500">
+            {fileHelp}
+          </p>
+
+          {file && (
+            <p className="mt-1 text-[11px] text-slate-600">
+              Selected: {file.name}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-600">
+            News Title *
+          </label>
+
+          <input
+            value={form.title}
+            onChange={(event) =>
+              updateField("title", event.target.value)
+            }
+            placeholder="Enter news title"
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
+            disabled={uploading}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-600">
+            Category
+          </label>
+
+          <select
+            value={form.category}
+            onChange={(event) =>
+              updateField("category", event.target.value)
+            }
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+            disabled={uploading}
+          >
+            {categoriesPreset.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-600">
+            Highlight
+          </label>
+
+          <input
+            value={form.highlight}
+            onChange={(event) =>
+              updateField("highlight", event.target.value)
+            }
+            placeholder="Short article highlight"
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
+            disabled={uploading}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-600">
+            Status
+          </label>
+
+          <select
+            value={form.status}
+            onChange={(event) =>
+              updateField("status", event.target.value)
+            }
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
+            disabled={uploading}
+          >
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-xs font-semibold text-slate-600">
+            News Content *
+          </label>
+
+          <textarea
+            value={form.content}
+            onChange={(event) =>
+              updateField("content", event.target.value)
+            }
+            rows={8}
+            placeholder="Write the full news article..."
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none"
+            disabled={uploading}
+          />
+        </div>
+
+        {uploading && (
+          <div className="md:col-span-2">
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+              <div
+                className="h-3 transition-all"
+                style={{
+                  width: `${uploadProgress}%`,
+                  background: primaryColor,
+                }}
+              />
+            </div>
+
+            <p className="text-xs text-slate-500 mt-2">
+              Saving... {uploadProgress}%
+            </p>
+          </div>
+        )}
+
+        <div className="md:col-span-2 flex flex-col sm:flex-row gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={uploading}
+            className="flex-1 py-3 rounded-lg font-semibold transition disabled:opacity-60"
+            style={{
+              background: accentColor,
+              color: primaryColor,
+            }}
+            onMouseOver={(event) => {
+              if (!uploading) {
+                event.currentTarget.style.background = accentHover;
+              }
+            }}
+            onMouseOut={(event) => {
+              if (!uploading) {
+                event.currentTarget.style.background = accentColor;
+              }
+            }}
+          >
+            {uploading ? "Saving..." : submitLabel}
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={uploading}
+            className="flex-1 py-3 rounded-lg font-semibold border border-slate-200 hover:bg-slate-50 disabled:opacity-60"
+            style={{ color: primaryColor }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const NewsArticleModal = ({ item, onClose }) => {
+  if (!item) return null;
+
+  const imageUrl = item.imageUrl || item.mediaUrl || "";
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/70"
+      variants={modalBackdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <motion.div
+        variants={modalPanel}
+        initial="hidden"
+        animate="show"
+        exit="exit"
+        className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+              News & Updates
+            </p>
+
+            <p
+              className="text-base font-extrabold truncate"
+              style={{ color: primaryColor }}
+            >
+              {item.title || "News Article"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+            aria-label="Close"
+          >
+            <BsX className="text-2xl" />
+          </button>
+        </div>
+
+        <div className="grid gap-0 md:grid-cols-5">
+          <div className="md:col-span-2 bg-slate-50 p-5">
+            <div className="rounded-3xl overflow-hidden border border-slate-100 bg-white shadow-sm">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={item.title || "SHEVET-CITY news"}
+                  className="w-full h-72 md:h-[420px] object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-72 md:h-[420px] flex items-center justify-center"
+                  style={{ background: pillLightBg }}
+                >
+                  <div className="text-center px-4">
+                    <BsNewspaper
+                      className="text-6xl mx-auto"
+                      style={{ color: primaryColor }}
+                    />
+                    <p
+                      className="mt-3 text-sm font-extrabold"
+                      style={{ color: primaryColor }}
+                    >
+                      SHEVET-CITY News
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span
+                className="px-3 py-1.5 rounded-full text-xs font-extrabold border"
+                style={{
+                  background: pillLightBg,
+                  color: primaryColor,
+                  borderColor: pillLightBorder,
+                }}
+              >
+                {item.category || "General"}
+              </span>
+
+              {item.status && (
+                <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 text-slate-500 bg-white">
+                  {item.status}
+                </span>
+              )}
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              {formatTimestamp(item.createdAt, item.createdAtMs)}
+            </p>
+          </div>
+
+          <div className="md:col-span-3 p-5 md:p-7">
+            <h3
+              className="text-2xl md:text-3xl font-extrabold leading-tight"
+              style={{ color: primaryColor }}
+            >
+              {item.title || "News Article"}
+            </h3>
+
+            {item.highlight && (
+              <p
+                className="mt-2 text-sm md:text-base font-semibold"
+                style={{ color: accentColor }}
+              >
+                {item.highlight}
+              </p>
+            )}
+
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                Full Story
+              </p>
+
+              <p className="mt-3 text-sm md:text-base text-slate-700 leading-relaxed whitespace-pre-line">
+                {item.content || "This article will be updated soon."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const NewsSection = ({
   title = "Latest from SHEVET-CITY Media",
-  subtitle = "Stay informed about updates, releases, and events from SHEVET-CITY Media.",
+  subtitle = "Stay informed about updates, releases and events from SHEVET-CITY Media.",
 }) => {
   const { currentUser } = useMyContext();
 
-  const [newsList, setNewsList] = useState([]);
+  const [remoteNews, setRemoteNews] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsError, setNewsError] = useState(null);
-
-  const [activeCat, setActiveCat] = useState("All");
-  const [openItem, setOpenItem] = useState(null);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [savingAdd, setSavingAdd] = useState(false);
-  const [addUploadProgress, setAddUploadProgress] = useState(0);
-  const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState("General");
-  const [newHighlight, setNewHighlight] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [newStatus, setNewStatus] = useState("published");
-  const [newImageFile, setNewImageFile] = useState(null);
-  const addFileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [addForm, setAddForm] = useState(emptyForm);
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editUploadProgress, setEditUploadProgress] = useState(0);
+  const [editing, setEditing] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editCategory, setEditCategory] = useState("General");
-  const [editHighlight, setEditHighlight] = useState("");
-  const [editContent, setEditContent] = useState("");
-  const [editStatus, setEditStatus] = useState("published");
-  const [editImageFile, setEditImageFile] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editFile, setEditFile] = useState(null);
   const [editExistingImageUrl, setEditExistingImageUrl] = useState("");
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const editFileInputRef = useRef(null);
@@ -205,6 +749,7 @@ const NewsSection = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedNews, setSelectedNews] = useState(null);
 
   const newsCollectionRef = useMemo(() => {
     return collection(db, "shevetCity", SHEVET_CITY_ID, "news");
@@ -215,15 +760,21 @@ const NewsSection = ({
       setNewsLoading(true);
       setNewsError(null);
 
-      const q = query(newsCollectionRef, orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
+      const newsQuery = query(
+        newsCollectionRef,
+        orderBy("createdAt", "desc"),
+      );
 
-      const data = snap.docs.map(serializeDoc);
-      setNewsList(sortByCreatedDesc(data));
+      const snapshot = await getDocs(newsQuery);
+      const data = snapshot.docs.map(serializeDoc);
+
+      setRemoteNews(sortByCreatedDesc(data));
     } catch (error) {
       console.error("Shevet-City news fetch error:", error);
-      setNewsError(error.message || "Failed to load news.");
-      setNewsList([]);
+      setNewsError(
+        "Failed to load online news. Showing fallback news content.",
+      );
+      setRemoteNews([]);
     } finally {
       setNewsLoading(false);
     }
@@ -233,79 +784,71 @@ const NewsSection = ({
     loadNews();
   }, [loadNews]);
 
-  const items = useMemo(() => {
-    return newsList.length > 0 ? newsList : HARDCODED_NEWS;
-  }, [newsList]);
+  const sourceNews =
+    remoteNews.length > 0 ? remoteNews : fallbackNews;
 
-  const categories = useMemo(() => getUniqueCategories(items), [items]);
+  const newsItems = useMemo(() => {
+    return sourceNews
+      .map((item) => ({
+        ...item,
+        id: item.id,
+        title: item.title || "News Update",
+        category: item.category || "General",
+        highlight: item.highlight || "",
+        content: item.content || "",
+        imageUrl: item.imageUrl || item.mediaUrl || "",
+        status: item.status || "published",
+        createdAtMs: item.createdAtMs || 0,
+        createdAt: item.createdAt || null,
+      }))
+      .filter(
+        (item) =>
+          currentUser || item.status === "published",
+      );
+  }, [sourceNews, currentUser]);
 
-  const filtered = useMemo(() => {
-    if (activeCat === "All") return items;
-    return items.filter((x) => x.category === activeCat);
-  }, [items, activeCat]);
+  const categories = useMemo(() => {
+    return getUniqueCategories(newsItems);
+  }, [newsItems]);
 
-  const gridAnimateState = !newsLoading ? "visible" : "hidden";
+  const filteredNews = useMemo(() => {
+    if (activeCategory === "All") return newsItems;
+
+    return newsItems.filter(
+      (item) => item.category === activeCategory,
+    );
+  }, [newsItems, activeCategory]);
+
+  const visibleNews = useMemo(() => {
+    if (!currentUser) return filteredNews;
+
+    return filteredNews.slice(0, visibleCount);
+  }, [filteredNews, visibleCount, currentUser]);
+
+  const hasMore =
+    currentUser && filteredNews.length > visibleCount;
+
+  const canShowLess =
+    currentUser && visibleCount > INITIAL_VISIBLE_COUNT;
 
   useEffect(() => {
-    if (!openItem) return;
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }, [activeCategory, newsItems.length]);
 
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = prev || "";
-    };
-  }, [openItem]);
-
-  const validateImageFile = (selectedFile, inputElement) => {
-    if (!selectedFile) return false;
-
-    if (!selectedFile.type?.startsWith("image/")) {
-      toast.error("Please select a valid image file.");
-      if (inputElement) inputElement.value = "";
-      return false;
-    }
-
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error("Image too large. Max 10MB.");
-      if (inputElement) inputElement.value = "";
-      return false;
-    }
-
-    return true;
-  };
-
-  const handlePickNewImage = (e) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    if (!validateImageFile(selectedFile, e.target)) return;
-
-    setNewImageFile(selectedFile);
-  };
-
-  const handlePickEditImage = (e) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    if (!validateImageFile(selectedFile, e.target)) return;
-
-    setEditImageFile(selectedFile);
-    setRemoveExistingImage(false);
-  };
-
-  const uploadToCloudinary = (selectedFile, folderName, progressSetter) => {
+  const uploadToCloudinary = (selectedFile, folderName) => {
     return new Promise((resolve, reject) => {
       if (!selectedFile) {
         resolve("");
         return;
       }
 
-      const cloudName = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
+      const cloudName =
+        process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset =
+        process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
 
       if (!cloudName || !uploadPreset) {
-        reject(new Error("Cloudinary cloud name or upload preset is missing."));
+        reject(new Error("Upload configuration is missing."));
         return;
       }
 
@@ -317,13 +860,14 @@ const NewsSection = ({
       body.append("folder", folderName);
 
       const xhr = new XMLHttpRequest();
-
       xhr.open("POST", uploadUrl);
 
       xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && progressSetter) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          progressSetter(progress);
+        if (event.lengthComputable) {
+          const progress = Math.round(
+            (event.loaded / event.total) * 100,
+          );
+          setUploadProgress(progress);
         }
       };
 
@@ -332,18 +876,26 @@ const NewsSection = ({
           const data = JSON.parse(xhr.responseText);
 
           if (xhr.status >= 200 && xhr.status < 300) {
-            if (progressSetter) progressSetter(100);
+            setUploadProgress(100);
             resolve(data.secure_url);
           } else {
-            reject(new Error(data?.error?.message || "Cloudinary upload failed."));
+            reject(
+              new Error(
+                data?.error?.message || "Image upload failed.",
+              ),
+            );
           }
         } catch {
-          reject(new Error("Invalid Cloudinary response."));
+          reject(new Error("Image upload failed."));
         }
       };
 
       xhr.onerror = () => {
-        reject(new Error("Upload failed. Check your internet connection."));
+        reject(
+          new Error(
+            "Upload failed. Check your internet connection.",
+          ),
+        );
       };
 
       xhr.onabort = () => {
@@ -354,100 +906,130 @@ const NewsSection = ({
     });
   };
 
-  const resetAddForm = () => {
-    setNewTitle("");
-    setNewCategory("General");
-    setNewHighlight("");
-    setNewContent("");
-    setNewStatus("published");
-    setNewImageFile(null);
-    setAddUploadProgress(0);
+  const validateImage = (selectedFile, inputElement) => {
+    if (!selectedFile) return false;
 
-    if (addFileInputRef.current) addFileInputRef.current.value = "";
+    if (!selectedFile.type?.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      inputElement.value = "";
+      return false;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast.error("Image too large. Max 10MB.");
+      inputElement.value = "";
+      return false;
+    }
+
+    return true;
+  };
+
+  const handlePickFile = (event) => {
+    const selectedFile = event.target.files?.[0];
+
+    if (!selectedFile) return;
+    if (!validateImage(selectedFile, event.target)) return;
+
+    setFile(selectedFile);
+  };
+
+  const handlePickEditFile = (event) => {
+    const selectedFile = event.target.files?.[0];
+
+    if (!selectedFile) return;
+    if (!validateImage(selectedFile, event.target)) return;
+
+    setEditFile(selectedFile);
+    setRemoveExistingImage(false);
+  };
+
+  const resetAddForm = () => {
+    setAddForm(emptyForm);
+    setFile(null);
+    setUploadProgress(0);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const closeAdd = () => {
-    if (savingAdd) return;
+    if (uploading) return;
+
     setAddOpen(false);
     resetAddForm();
   };
 
-  const openAddModal = () => {
-    if (!currentUser) {
-      toast.error("Please sign in before adding news.");
-      return;
-    }
-
-    setAddOpen(true);
-  };
-
-  const openEdit = (item) => {
-    if (!currentUser) {
-      toast.error("Please sign in before editing news.");
-      return;
-    }
-
-    if (item?.isFallback || String(item?.id || "").startsWith("hc-")) {
-      toast.info("This is a hardcoded news item. Add it first before editing.");
-      return;
-    }
-
-    setEditId(item?.id || null);
-    setEditTitle(item?.title || "");
-    setEditCategory(item?.category || "General");
-    setEditHighlight(item?.highlight || "");
-    setEditContent(item?.content || "");
-    setEditStatus(item?.status || "published");
-    setEditExistingImageUrl(item?.imageUrl || item?.mediaUrl || "");
-    setEditImageFile(null);
+  const resetEditForm = () => {
+    setEditId(null);
+    setEditForm(emptyForm);
+    setEditFile(null);
+    setEditExistingImageUrl("");
     setRemoveExistingImage(false);
-    setEditUploadProgress(0);
-    setEditOpen(true);
+    setUploadProgress(0);
 
-    if (editFileInputRef.current) editFileInputRef.current.value = "";
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
   };
 
   const closeEdit = () => {
-    if (savingEdit) return;
+    if (editing) return;
 
     setEditOpen(false);
-    setEditId(null);
-    setEditTitle("");
-    setEditCategory("General");
-    setEditHighlight("");
-    setEditContent("");
-    setEditStatus("published");
-    setEditImageFile(null);
-    setEditExistingImageUrl("");
-    setRemoveExistingImage(false);
-    setEditUploadProgress(0);
-
-    if (editFileInputRef.current) editFileInputRef.current.value = "";
+    resetEditForm();
   };
 
-  const openDelete = (item) => {
-    if (!currentUser) {
-      toast.error("Please sign in before deleting news.");
-      return;
+  const buildPayload = (
+    form,
+    imageUrl,
+    selectedFile,
+    mode,
+  ) => {
+    const payload = {
+      title: form.title.trim(),
+      category: form.category || "General",
+      highlight: form.highlight.trim(),
+      content: form.content.trim(),
+      status: form.status || "published",
+      updatedAt: serverTimestamp(),
+      updatedAtMs: Date.now(),
+    };
+
+    if (imageUrl !== undefined) {
+      payload.imageUrl = imageUrl;
+      payload.mediaUrl = imageUrl;
+
+      if (imageUrl && selectedFile) {
+        payload.fileName = selectedFile.name;
+        payload.fileType = selectedFile.type;
+        payload.fileSize = selectedFile.size;
+        payload.storageProvider = "cloudinary";
+      }
+
+      if (!imageUrl) {
+        payload.fileName = "";
+        payload.fileType = "";
+        payload.fileSize = 0;
+        payload.storageProvider = "";
+      }
     }
 
-    if (item?.isFallback || String(item?.id || "").startsWith("hc-")) {
-      toast.info("This is a hardcoded news item and cannot be deleted from here.");
-      return;
+    if (mode === "create") {
+      payload.createdAt = serverTimestamp();
+      payload.createdAtMs = Date.now();
+      payload.createdBy = currentUser.uid;
+      payload.createdByName =
+        getUserDisplayName(currentUser);
+      payload.createdByEmail = currentUser.email || "";
+    } else {
+      payload.updatedBy = currentUser.uid;
+      payload.updatedByName =
+        getUserDisplayName(currentUser);
+      payload.updatedByEmail = currentUser.email || "";
     }
 
-    setDeleteTarget(item);
-    setDeleteOpen(true);
-  };
-
-  const closeDelete = () => {
-    if (deleting) return;
-    setDeleteOpen(false);
-    setDeleteTarget(null);
-  };
-
-  const getUserName = () => {
-    return currentUser?.displayName || currentUser?.email?.split("@")[0] || "User";
+    return payload;
   };
 
   const handleAddNews = async () => {
@@ -456,69 +1038,82 @@ const NewsSection = ({
       return;
     }
 
-    if (!newTitle.trim()) {
-      toast.error("Please enter a title.");
+    if (!addForm.title.trim()) {
+      toast.error("Please enter the news title.");
       return;
     }
 
-    if (!newCategory) {
-      toast.error("Please select a category.");
-      return;
-    }
-
-    if (!newContent.trim()) {
+    if (!addForm.content.trim()) {
       toast.error("Please enter the news content.");
       return;
     }
 
     try {
-      setSavingAdd(true);
-      setAddUploadProgress(0);
+      setUploading(true);
+      setUploadProgress(0);
 
       let imageUrl = "";
 
-      if (newImageFile) {
+      if (file) {
         imageUrl = await uploadToCloudinary(
-          newImageFile,
+          file,
           "shevet-city/news",
-          setAddUploadProgress
         );
       }
 
-      const payload = {
-        title: newTitle.trim(),
-        category: newCategory,
-        highlight: newHighlight.trim(),
-        content: newContent.trim(),
-        status: newStatus,
+      const payload = buildPayload(
+        addForm,
         imageUrl,
-        mediaUrl: imageUrl,
-        fileName: newImageFile?.name || "",
-        fileType: newImageFile?.type || "",
-        fileSize: newImageFile?.size || 0,
-        storageProvider: imageUrl ? "cloudinary" : "",
-        createdAt: serverTimestamp(),
-        createdAtMs: Date.now(),
-        updatedAt: serverTimestamp(),
-        createdBy: currentUser.uid,
-        createdByName: getUserName(),
-        createdByEmail: currentUser.email || "",
-      };
+        file,
+        "create",
+      );
 
       await addDoc(newsCollectionRef, payload);
 
-      toast.success("News published successfully.");
+      toast.success("News added successfully.");
       closeAdd();
       await loadNews();
     } catch (error) {
       console.error("Error adding Shevet-City news:", error);
-      toast.error(error.message || "Failed to publish news.");
+      toast.error(error.message || "Failed to add news.");
     } finally {
-      setSavingAdd(false);
+      setUploading(false);
     }
   };
 
-  const handleEditSave = async () => {
+  const openEdit = (item) => {
+    if (!currentUser) {
+      toast.error("Please sign in before editing news.");
+      return;
+    }
+
+    if (
+      item?.isFallback ||
+      String(item?.id || "").startsWith("fallback-")
+    ) {
+      toast.info(
+        "This is fallback news. Add it as a real news item before editing.",
+      );
+      return;
+    }
+
+    setEditId(item.id);
+    setEditForm({
+      title: item.title || "",
+      category: item.category || "General",
+      highlight: item.highlight || "",
+      content: item.content || "",
+      status: item.status || "published",
+    });
+    setEditExistingImageUrl(
+      item.imageUrl || item.mediaUrl || "",
+    );
+    setEditFile(null);
+    setRemoveExistingImage(false);
+    setEditOpen(true);
+  };
+
+  const handleEditNews = async () => {
     if (!currentUser) {
       toast.error("Please sign in before editing news.");
       return;
@@ -529,75 +1124,87 @@ const NewsSection = ({
       return;
     }
 
-    if (!editTitle.trim()) {
-      toast.error("Please enter a title.");
+    if (!editForm.title.trim()) {
+      toast.error("Please enter the news title.");
       return;
     }
 
-    if (!editContent.trim()) {
+    if (!editForm.content.trim()) {
       toast.error("Please enter the news content.");
       return;
     }
 
     try {
-      setSavingEdit(true);
-      setEditUploadProgress(0);
+      setEditing(true);
+      setUploadProgress(0);
 
-      let imageUrl = editExistingImageUrl;
+      let imageUrl;
 
       if (removeExistingImage) {
         imageUrl = "";
-      }
-
-      if (editImageFile) {
+      } else if (editFile) {
         imageUrl = await uploadToCloudinary(
-          editImageFile,
+          editFile,
           "shevet-city/news",
-          setEditUploadProgress
         );
       }
 
-      const payload = {
-        title: editTitle.trim(),
-        category: editCategory || "General",
-        highlight: editHighlight.trim(),
-        content: editContent.trim(),
-        status: editStatus,
+      const payload = buildPayload(
+        editForm,
         imageUrl,
-        mediaUrl: imageUrl,
-        updatedAt: serverTimestamp(),
-        updatedAtMs: Date.now(),
-        updatedBy: currentUser.uid,
-        updatedByName: getUserName(),
-        updatedByEmail: currentUser.email || "",
-      };
+        editFile,
+        "edit",
+      );
 
-      if (editImageFile) {
-        payload.fileName = editImageFile.name;
-        payload.fileType = editImageFile.type;
-        payload.fileSize = editImageFile.size;
-        payload.storageProvider = "cloudinary";
-      }
+      const newsRef = doc(
+        db,
+        "shevetCity",
+        SHEVET_CITY_ID,
+        "news",
+        editId,
+      );
 
-      if (removeExistingImage) {
-        payload.fileName = "";
-        payload.fileType = "";
-        payload.fileSize = 0;
-        payload.storageProvider = "";
-      }
-
-      const newsRef = doc(db, "shevetCity", SHEVET_CITY_ID, "news", editId);
       await updateDoc(newsRef, payload);
 
       toast.success("News updated successfully.");
       closeEdit();
       await loadNews();
     } catch (error) {
-      console.error("Error updating Shevet-City news:", error);
+      console.error(
+        "Error updating Shevet-City news:",
+        error,
+      );
       toast.error(error.message || "Failed to update news.");
     } finally {
-      setSavingEdit(false);
+      setEditing(false);
     }
+  };
+
+  const openDelete = (item) => {
+    if (!currentUser) {
+      toast.error("Please sign in before deleting news.");
+      return;
+    }
+
+    if (
+      item?.isFallback ||
+      String(item?.id || "").startsWith("fallback-")
+    ) {
+      toast.info(
+        "This is fallback news and cannot be deleted from here.",
+      );
+      return;
+    }
+
+    setDeleteTarget(item);
+    setDeleteOpen(true);
+  };
+
+  const closeDelete = () => {
+    if (deleting) return;
+
+    setDeleteOpen(false);
+    setDeleteTarget(null);
   };
 
   const handleDeleteConfirm = async () => {
@@ -619,7 +1226,7 @@ const NewsSection = ({
         "shevetCity",
         SHEVET_CITY_ID,
         "news",
-        deleteTarget.id
+        deleteTarget.id,
       );
 
       await deleteDoc(newsRef);
@@ -628,100 +1235,155 @@ const NewsSection = ({
       closeDelete();
       await loadNews();
     } catch (error) {
-      console.error("Error deleting Shevet-City news:", error);
+      console.error(
+        "Error deleting Shevet-City news:",
+        error,
+      );
       toast.error(error.message || "Failed to delete news.");
     } finally {
       setDeleting(false);
     }
   };
 
-  const primaryColor = "#5A005A";
-  const accentColor = "#F29A00";
-  const accentHover = "#FFA500";
-
   return (
     <section
       id="news"
-      className="relative bg-slate-50 py-16 md:py-20 px-4 md:px-8 lg:px-16"
+      className="bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16"
     >
       <div className="max-w-6xl mx-auto">
         <motion.div
-          variants={containerVariants}
+          variants={container}
           initial="hidden"
-          whileInView="visible"
+          whileInView="show"
           viewport={{ once: true, amount: 0.2 }}
-          className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10"
+          className="mb-10"
         >
-          <div>
-            <p
-              className="text-xs font-semibold tracking-[0.3em] uppercase mb-2"
+          <p
+            className="text-xs font-semibold tracking-[0.3em] uppercase mb-2"
+            style={{ color: primaryColor }}
+          >
+            News & Updates
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            <span>Home</span>
+            <span className="text-slate-300">/</span>
+            <span
+              className="font-semibold"
               style={{ color: primaryColor }}
             >
-              News & Updates
-            </p>
-
-            <h2
-              className="text-3xl md:text-4xl font-extrabold leading-tight"
-              style={{ color: primaryColor }}
-            >
-              {title}
-            </h2>
-
-            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl">
-              {subtitle}
-            </p>
-
-            {currentUser && (
-              <p className="text-xs font-semibold mt-3" style={{ color: primaryColor }}>
-                Signed-in CRUD mode active. You can add, edit, and delete news.
-              </p>
-            )}
+              News
+            </span>
           </div>
 
-          <div className="flex flex-col items-start md:items-end gap-3">
-            {newsLoading && (
-              <div className="text-xs font-semibold text-slate-500">
-                Loading news...
-              </div>
-            )}
+          <div className="mt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+            <div>
+              <h2
+                className="text-3xl md:text-4xl font-extrabold leading-tight"
+                style={{ color: primaryColor }}
+              >
+                {title}
+              </h2>
 
-            {newsError && (
-              <div className="text-xs font-semibold text-red-600">
-                Failed to load Firestore news. Showing local fallback content.
-              </div>
-            )}
+              <p className="mt-3 text-sm md:text-base text-slate-600 max-w-3xl leading-relaxed">
+                {subtitle}
+              </p>
+            </div>
 
             {currentUser ? (
               <button
                 type="button"
-                onClick={openAddModal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-semibold transition"
+                onClick={() => setAddOpen(true)}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-sm font-semibold transition shadow-sm"
                 style={{
                   background: accentColor,
                   color: primaryColor,
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.background = accentHover)}
-                onMouseOut={(e) => (e.currentTarget.style.background = accentColor)}
+                onMouseOver={(event) => {
+                  event.currentTarget.style.background =
+                    accentHover;
+                }}
+                onMouseOut={(event) => {
+                  event.currentTarget.style.background =
+                    accentColor;
+                }}
               >
                 <BsPlusCircle className="text-base" />
                 Add News
               </button>
-            ) : (
-              <div className="text-xs font-semibold text-slate-500">
-                Sign in to add news.
+            ) : null}
+          </div>
+        </motion.div>
+
+        <motion.div
+          variants={container}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+          className="bg-slate-50 rounded-3xl border border-slate-100 shadow-sm p-4 md:p-5"
+        >
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <p
+                  className="text-xs font-semibold tracking-[0.25em] uppercase mb-2"
+                  style={{ color: primaryColor }}
+                >
+                  <BsNewspaper className="inline-block mr-2" />
+                  Latest News
+                </p>
+
+                <h3
+                  className="text-xl md:text-2xl font-extrabold leading-tight"
+                  style={{ color: primaryColor }}
+                >
+                  Explore our latest stories
+                </h3>
+
+                <p className="mt-2 text-xs md:text-sm text-slate-600 leading-relaxed">
+                  Read updates, reports, events, programmes,
+                  entertainment stories and public-interest
+                  content from SHEVET-CITY.
+                </p>
               </div>
-            )}
+
+              <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+                {newsLoading && (
+                  <p className="text-xs font-semibold text-slate-500">
+                    Loading news...
+                  </p>
+                )}
+
+                {newsError && (
+                  <p className="text-xs font-semibold text-red-600 max-w-[220px] sm:text-right">
+                    {newsError}
+                  </p>
+                )}
+
+                {currentUser && (
+                  <p
+                    className="text-[11px] font-semibold"
+                    style={{ color: primaryColor }}
+                  >
+                    Signed-in CRUD mode
+                  </p>
+                )}
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => {
-                const active = cat === activeCat;
+              {categories.map((category) => {
+                const active =
+                  category === activeCategory;
 
                 return (
                   <button
-                    key={cat}
+                    key={category}
                     type="button"
-                    onClick={() => setActiveCat(cat)}
-                    className="px-4 py-2 rounded-full text-xs md:text-sm font-semibold border transition"
+                    onClick={() =>
+                      setActiveCategory(category)
+                    }
+                    className="px-3 py-1.5 rounded-full text-[11px] md:text-xs font-semibold border transition"
                     style={
                       active
                         ? {
@@ -735,253 +1397,123 @@ const NewsSection = ({
                             borderColor: "#e6e6e6",
                           }
                     }
-                    onMouseOver={(e) => {
+                    onMouseOver={(event) => {
                       if (!active) {
-                        e.currentTarget.style.borderColor = accentColor;
-                        e.currentTarget.style.background = "#fff7ec";
+                        event.currentTarget.style.borderColor =
+                          accentColor;
+                        event.currentTarget.style.background =
+                          "#fff7ec";
                       }
                     }}
-                    onMouseOut={(e) => {
+                    onMouseOut={(event) => {
                       if (!active) {
-                        e.currentTarget.style.borderColor = "#e6e6e6";
-                        e.currentTarget.style.background = "#fff";
+                        event.currentTarget.style.borderColor =
+                          "#e6e6e6";
+                        event.currentTarget.style.background =
+                          "#fff";
                       }
                     }}
                   >
-                    {cat}
+                    {category}
                   </button>
                 );
               })}
             </div>
-          </div>
-        </motion.div>
 
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate={gridAnimateState}
-          className="grid gap-6 md:grid-cols-3"
-        >
-          {filtered.map((item) => {
-            const imageUrl = item.imageUrl || item.mediaUrl || "";
-
-            return (
-              <motion.article
-                key={item.id}
-                variants={cardVariants}
-                className="group relative overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-100 hover:shadow-xl transition-shadow duration-500"
-              >
-                <div
-                  className="absolute left-0 top-0 h-1 w-full z-10"
-                  style={{
-                    background: `linear-gradient(90deg, ${primaryColor}, ${accentColor})`,
-                  }}
+            <motion.div
+              variants={container}
+              initial="hidden"
+              animate={
+                !newsLoading ? "show" : "hidden"
+              }
+              className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-4"
+            >
+              {visibleNews.map((item) => (
+                <NewsCard
+                  key={item.id}
+                  item={item}
+                  currentUser={currentUser}
+                  onEdit={openEdit}
+                  onDelete={openDelete}
+                  onView={setSelectedNews}
                 />
+              ))}
+            </motion.div>
 
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={item.title || "SHEVET-CITY news"}
-                    className="w-full h-48 object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="h-48 bg-[#f7eef7] flex items-center justify-center">
-                    <div className="text-center px-4">
-                      <BsImage className="text-4xl mx-auto mb-2" style={{ color: primaryColor }} />
-                      <p className="text-xs font-semibold" style={{ color: primaryColor }}>
-                        SHEVET-CITY News
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-5 pb-5 flex flex-col h-full">
-                  <div className="flex items-center justify-end mb-3">
-                    <span
-                      className="text-[11px] font-semibold px-3 py-1 rounded-full border"
+            {currentUser &&
+              !newsLoading &&
+              filteredNews.length >
+                INITIAL_VISIBLE_COUNT && (
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  {hasMore && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVisibleCount((previous) =>
+                          Math.min(
+                            previous + LOAD_MORE_COUNT,
+                            filteredNews.length,
+                          ),
+                        )
+                      }
+                      className="inline-flex items-center justify-center px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold transition shadow-sm"
                       style={{
-                        background: "#f7eef7",
-                        color: primaryColor,
-                        borderColor: "#ead9ea",
+                        background: primaryColor,
+                        color: "#fff",
+                      }}
+                      onMouseOver={(event) => {
+                        event.currentTarget.style.background =
+                          primaryDark;
+                      }}
+                      onMouseOut={(event) => {
+                        event.currentTarget.style.background =
+                          primaryColor;
                       }}
                     >
-                      {item.category || "General"}
-                    </span>
-                  </div>
-
-                  <h3
-                    className="text-lg md:text-xl font-bold group-hover:transition-colors"
-                    style={{ color: primaryColor }}
-                  >
-                    {item.title}
-                  </h3>
-
-                  {!!item.highlight && (
-                    <p className="mt-2 text-sm font-medium" style={{ color: accentColor }}>
-                      {item.highlight}
-                    </p>
+                      More News
+                    </button>
                   )}
 
-                  <p className="mt-3 text-sm text-slate-600 leading-relaxed flex-1 line-clamp-4">
-                    {item.content}
-                  </p>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                      {formatDate(item.createdAt, item.createdAtMs)}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOpenItem(item)}
-                        className="inline-flex items-center gap-2 text-sm font-semibold"
-                        style={{ color: primaryColor }}
-                      >
-                        Read more
-                        <span
-                          className="w-6 h-6 rounded-full border flex items-center justify-center transition-colors"
-                          style={{
-                            borderColor: "#f0e0c6",
-                            color: primaryColor,
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.background = accentColor;
-                            e.currentTarget.style.color = "#fff";
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.background = "transparent";
-                            e.currentTarget.style.color = primaryColor;
-                          }}
-                        >
-                          <BsArrowRight className="text-xs" />
-                        </span>
-                      </button>
-
-                      {currentUser && !item.isFallback && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(item)}
-                            className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-inherit border border-slate-200 shadow-sm flex items-center justify-center"
-                            aria-label="Edit"
-                            title="Edit"
-                            style={{ color: primaryColor }}
-                          >
-                            <BsPencilSquare />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => openDelete(item)}
-                            className="w-9 h-9 rounded-full bg-white hover:bg-slate-50 text-red-600 border border-slate-200 shadow-sm flex items-center justify-center"
-                            aria-label="Delete"
-                            title="Delete"
-                          >
-                            <BsTrash />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {canShowLess && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVisibleCount(
+                          INITIAL_VISIBLE_COUNT,
+                        )
+                      }
+                      className="inline-flex items-center justify-center px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold transition shadow-sm"
+                      style={{
+                        background: "#fff",
+                        color: primaryColor,
+                        border: `1px solid ${primaryColor}`,
+                      }}
+                    >
+                      Show Less
+                    </button>
+                  )}
                 </div>
+              )}
 
-                <div
-                  className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{
-                    background: `linear-gradient(135deg, rgba(90,0,90,0.03), rgba(242,154,0,0.06))`,
-                  }}
-                />
-              </motion.article>
-            );
-          })}
-        </motion.div>
-
-        {!newsLoading && filtered.length === 0 && (
-          <div className="mt-10 text-center text-slate-600">
-            No news posts yet.{" "}
-            {currentUser ? "Click “Add News” to publish one." : "Sign in to publish."}
+            {!newsLoading &&
+              filteredNews.length === 0 && (
+                <div className="rounded-2xl bg-white border border-slate-100 p-5 text-center text-sm text-slate-600">
+                  No news posts yet.{" "}
+                  {currentUser
+                    ? "Click “Add News” to create one."
+                    : "Please check back soon for updates."}
+                </div>
+              )}
           </div>
-        )}
+        </motion.div>
       </div>
 
       <AnimatePresence>
-        {openItem && (
-          <motion.div
-            className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-24 bg-black/70"
-            variants={modalBackdrop}
-            initial="hidden"
-            animate="show"
-            exit="exit"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setOpenItem(null);
-            }}
-          >
-            <motion.div
-              variants={modalPanel}
-              initial="hidden"
-              animate="show"
-              exit="exit"
-              className="relative w-full max-w-2xl bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[calc(100vh-7rem)] flex flex-col"
-            >
-              {(openItem.imageUrl || openItem.mediaUrl) && (
-                <img
-                  src={openItem.imageUrl || openItem.mediaUrl}
-                  alt={openItem.title || "SHEVET-CITY news"}
-                  className="w-full h-56 object-cover"
-                />
-              )}
-
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
-                    {openItem.category || "General"} •{" "}
-                    {formatDate(openItem.createdAt, openItem.createdAtMs)}
-                  </p>
-                  <p
-                    className="text-base font-extrabold truncate"
-                    style={{ color: primaryColor }}
-                  >
-                    {openItem.title}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setOpenItem(null)}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
-                  aria-label="Close"
-                >
-                  <BsX className="text-2xl" />
-                </button>
-              </div>
-
-              <div className="p-5 overflow-y-auto flex-1 min-h-0">
-                {!!openItem.highlight && (
-                  <p className="text-sm font-semibold" style={{ color: accentColor }}>
-                    {openItem.highlight}
-                  </p>
-                )}
-                <p className="mt-3 text-sm md:text-base text-slate-700 leading-relaxed whitespace-pre-line">
-                  {openItem.content}
-                </p>
-              </div>
-
-              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setOpenItem(null)}
-                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition"
-                  style={{ background: primaryColor, color: "#fff" }}
-                  onMouseOver={(e) => (e.currentTarget.style.background = "#6A006A")}
-                  onMouseOut={(e) => (e.currentTarget.style.background = primaryColor)}
-                >
-                  Close <BsX />
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {selectedNews && (
+          <NewsArticleModal
+            item={selectedNews}
+            onClose={() => setSelectedNews(null)}
+          />
         )}
       </AnimatePresence>
 
@@ -993,157 +1525,26 @@ const NewsSection = ({
             initial="hidden"
             animate="show"
             exit="exit"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) closeAdd();
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeAdd();
+              }
             }}
           >
-            <motion.div
-              variants={modalPanel}
-              initial="hidden"
-              animate="show"
-              exit="exit"
-              className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[95vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                <div>
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
-                    Signed-in User
-                  </p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
-                    Add News
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeAdd}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
-                  aria-label="Close"
-                >
-                  <BsX className="text-2xl" />
-                </button>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    News Image
-                  </label>
-                  <input
-                    ref={addFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePickNewImage}
-                    className="mt-1 w-full text-sm"
-                    disabled={savingAdd}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Optional. JPG/PNG recommended. Max 10MB.
-                  </p>
-                  {newImageFile && (
-                    <p className="mt-1 text-xs text-slate-600">
-                      Selected: <span className="font-semibold">{newImageFile.name}</span>
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Title</label>
-                  <input
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g. SHEVET-CITY announces new production"
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
-                    disabled={savingAdd}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Category</label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
-                    disabled={savingAdd}
-                  >
-                    {categoriesPreset.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Status
-                  </label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
-                    disabled={savingAdd}
-                  >
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Highlight
-                  </label>
-                  <input
-                    value={newHighlight}
-                    onChange={(e) => setNewHighlight(e.target.value)}
-                    placeholder="Short highlight..."
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
-                    disabled={savingAdd}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Content</label>
-                  <textarea
-                    value={newContent}
-                    onChange={(e) => setNewContent(e.target.value)}
-                    placeholder="Write the full news update here..."
-                    rows={6}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none"
-                    disabled={savingAdd}
-                  />
-                </div>
-
-                {savingAdd && newImageFile && (
-                  <div>
-                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="h-3 transition-all"
-                        style={{
-                          width: `${addUploadProgress}%`,
-                          background: primaryColor,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      Uploading image... {addUploadProgress}%
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleAddNews}
-                  disabled={savingAdd}
-                  className="w-full py-3 rounded-lg font-semibold transition disabled:opacity-60"
-                  style={{ background: accentColor, color: primaryColor }}
-                  onMouseOver={(e) => (e.currentTarget.style.background = accentHover)}
-                  onMouseOut={(e) => (e.currentTarget.style.background = accentColor)}
-                >
-                  {savingAdd ? "Publishing..." : "Publish News"}
-                </button>
-              </div>
-            </motion.div>
+            <NewsForm
+              title="Add News"
+              fileInputRef={fileInputRef}
+              form={addForm}
+              setForm={setAddForm}
+              file={file}
+              existingImageUrl=""
+              uploading={uploading}
+              uploadProgress={uploadProgress}
+              onPickFile={handlePickFile}
+              onClose={closeAdd}
+              onSubmit={handleAddNews}
+              submitLabel="Add News"
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -1156,176 +1557,36 @@ const NewsSection = ({
             initial="hidden"
             animate="show"
             exit="exit"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) closeEdit();
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeEdit();
+              }
             }}
           >
-            <motion.div
-              variants={modalPanel}
-              initial="hidden"
-              animate="show"
-              exit="exit"
-              className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[95vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                <div>
-                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
-                    Signed-in User
-                  </p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
-                    Edit News
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
-                  aria-label="Close"
-                >
-                  <BsX className="text-2xl" />
-                </button>
-              </div>
-
-              <div className="p-5 space-y-4">
-                {editExistingImageUrl && !removeExistingImage && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">
-                      Current Image
-                    </label>
-                    <img
-                      src={editExistingImageUrl}
-                      alt="Current news"
-                      className="mt-2 w-full h-40 object-cover rounded-xl border"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRemoveExistingImage(true);
-                        setEditExistingImageUrl("");
-                      }}
-                      disabled={savingEdit}
-                      className="mt-2 text-xs font-semibold text-red-600"
-                    >
-                      Remove current image
-                    </button>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Replace News Image
-                  </label>
-                  <input
-                    ref={editFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePickEditImage}
-                    className="mt-1 w-full text-sm"
-                    disabled={savingEdit}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Optional. Leave empty to keep current image.
-                  </p>
-                  {editImageFile && (
-                    <p className="mt-1 text-xs text-slate-600">
-                      Selected: <span className="font-semibold">{editImageFile.name}</span>
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Title</label>
-                  <input
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Category</label>
-                  <select
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
-                    disabled={savingEdit}
-                  >
-                    {categoriesPreset.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Status
-                  </label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring bg-white"
-                    disabled={savingEdit}
-                  >
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Highlight
-                  </label>
-                  <input
-                    value={editHighlight}
-                    onChange={(e) => setEditHighlight(e.target.value)}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring"
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600">Content</label>
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={6}
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring resize-none"
-                    disabled={savingEdit}
-                  />
-                </div>
-
-                {savingEdit && editImageFile && (
-                  <div>
-                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="h-3 transition-all"
-                        style={{
-                          width: `${editUploadProgress}%`,
-                          background: primaryColor,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      Uploading image... {editUploadProgress}%
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleEditSave}
-                  disabled={savingEdit}
-                  className="w-full py-3 rounded-lg font-semibold transition disabled:opacity-60"
-                  style={{ background: primaryColor, color: "#fff" }}
-                >
-                  {savingEdit ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </motion.div>
+            <NewsForm
+              title="Edit News"
+              fileInputRef={editFileInputRef}
+              form={editForm}
+              setForm={setEditForm}
+              file={editFile}
+              existingImageUrl={
+                removeExistingImage
+                  ? ""
+                  : editExistingImageUrl
+              }
+              uploading={editing}
+              uploadProgress={uploadProgress}
+              onPickFile={handlePickEditFile}
+              onRemoveExistingImage={() => {
+                setRemoveExistingImage(true);
+                setEditExistingImageUrl("");
+              }}
+              onClose={closeEdit}
+              onSubmit={handleEditNews}
+              submitLabel="Save Changes"
+              fileLabel="Replace News Image"
+              fileHelp="Optional. Leave empty to keep the current image."
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -1338,8 +1599,10 @@ const NewsSection = ({
             initial="hidden"
             animate="show"
             exit="exit"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) closeDelete();
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeDelete();
+              }
             }}
           >
             <motion.div
@@ -1354,7 +1617,11 @@ const NewsSection = ({
                   <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                     Signed-in User
                   </p>
-                  <p className="text-base font-extrabold" style={{ color: primaryColor }}>
+
+                  <p
+                    className="text-base font-extrabold"
+                    style={{ color: primaryColor }}
+                  >
                     Delete News
                   </p>
                 </div>
@@ -1371,7 +1638,12 @@ const NewsSection = ({
 
               <div className="p-5 space-y-3">
                 <p className="text-sm text-slate-700">
-                  Are you sure you want to delete this news post? This cannot be undone.
+                  Are you sure you want to delete{" "}
+                  <span className="font-semibold">
+                    {deleteTarget?.title ||
+                      "this news article"}
+                  </span>
+                  ? This action cannot be undone.
                 </p>
 
                 <div className="flex gap-3">
@@ -1391,7 +1663,9 @@ const NewsSection = ({
                     className="flex-1 py-2 rounded-lg font-semibold text-white disabled:opacity-60"
                     style={{ background: "#dc2626" }}
                   >
-                    {deleting ? "Deleting..." : "Delete"}
+                    {deleting
+                      ? "Deleting..."
+                      : "Delete"}
                   </button>
                 </div>
               </div>
