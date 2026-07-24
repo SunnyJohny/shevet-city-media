@@ -8,6 +8,14 @@ import {
   BsPlusCircle,
   BsPencilSquare,
   BsTrash,
+  BsShare,
+  BsLink45Deg,
+  BsWhatsapp,
+  BsFacebook,
+  BsTwitterX,
+  BsLinkedin,
+  BsTelegram,
+  BsEnvelope,
 } from "react-icons/bs";
 import { toast } from "react-toastify";
 import {
@@ -166,6 +174,10 @@ const GallerySection = ({ title, subtitle }) => {
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+  const [sharingImage, setSharingImage] = useState(false);
+
   const galleryCollectionRef = useMemo(() => {
     return collection(db, "shevetCity", SHEVET_CITY_ID, "gallery");
   }, []);
@@ -259,6 +271,222 @@ const GallerySection = ({ title, subtitle }) => {
     if (activeIndex === null || filtered.length === 0) return;
     setActiveIndex((prev) => (prev + 1) % filtered.length);
   };
+
+  const getGalleryShareUrl = useCallback((item) => {
+    if (typeof window === "undefined") return "";
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("news");
+    url.searchParams.set("gallery", item?.id || "");
+    url.hash = "gallery";
+
+    return url.toString();
+  }, []);
+
+  const getShareDetails = useCallback(
+    (item) => {
+      const title =
+        item?.alt ||
+        item?.title ||
+        "SHEVET-CITY gallery photo";
+
+      const description =
+        item?.description ||
+        `View this ${item?.category || "gallery"} photo from SHEVET-CITY Media.`;
+
+      return {
+        title,
+        description,
+        imageUrl: item?.src || item?.imageUrl || item?.mediaUrl || "",
+        url: getGalleryShareUrl(item),
+      };
+    },
+    [getGalleryShareUrl],
+  );
+
+  const openShare = useCallback((item, event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    setShareTarget(item);
+    setShareOpen(true);
+  }, []);
+
+  const closeShare = useCallback(() => {
+    if (sharingImage) return;
+    setShareOpen(false);
+    setShareTarget(null);
+  }, [sharingImage]);
+
+  const openShareWindow = useCallback((url) => {
+    if (!url || typeof window === "undefined") return;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer,width=760,height=680",
+    );
+  }, []);
+
+  const copyShareLink = useCallback(async () => {
+    if (!shareTarget) return;
+
+    const { url } = getShareDetails(shareTarget);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Gallery link copied.");
+    } catch (error) {
+      console.error("Gallery link copy failed:", error);
+      toast.error("Unable to copy the gallery link.");
+    }
+  }, [getShareDetails, shareTarget]);
+
+  const shareToPlatform = useCallback(
+    (platform) => {
+      if (!shareTarget) return;
+
+      const { title, description, url } =
+        getShareDetails(shareTarget);
+
+      const message = `${title}\n\n${description}\n\n${url}`;
+      const encodedUrl = encodeURIComponent(url);
+      const encodedTitle = encodeURIComponent(title);
+      const encodedDescription = encodeURIComponent(description);
+      const encodedMessage = encodeURIComponent(message);
+
+      const platformUrls = {
+        whatsapp: `https://api.whatsapp.com/send?text=${encodedMessage}`,
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+        x: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
+        linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+        telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}%0A${encodedDescription}`,
+        email: `mailto:?subject=${encodedTitle}&body=${encodedMessage}`,
+      };
+
+      openShareWindow(platformUrls[platform]);
+    },
+    [getShareDetails, openShareWindow, shareTarget],
+  );
+
+  const shareToAvailableApps = useCallback(async () => {
+    if (!shareTarget) return;
+
+    const { title, description, imageUrl, url } =
+      getShareDetails(shareTarget);
+
+    try {
+      setSharingImage(true);
+
+      let imageFile = null;
+
+      if (imageUrl) {
+        try {
+          const response = await fetch(imageUrl, {
+            mode: "cors",
+            cache: "no-store",
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const extension =
+              blob.type?.split("/")[1]?.split("+")[0] || "jpg";
+
+            imageFile = new File(
+              [blob],
+              `shevet-city-gallery-${shareTarget.id || Date.now()}.${extension}`,
+              { type: blob.type || "image/jpeg" },
+            );
+          }
+        } catch (imageError) {
+          console.warn(
+            "The gallery image could not be attached to native sharing:",
+            imageError,
+          );
+        }
+      }
+
+      const text = `${description}\n\n${url}`;
+
+      if (
+        imageFile &&
+        navigator.canShare?.({ files: [imageFile] })
+      ) {
+        await navigator.share({
+          title,
+          text,
+          url,
+          files: [imageFile],
+        });
+
+        return;
+      }
+
+      if (navigator.share) {
+        await navigator.share({
+          title,
+          text,
+          url,
+        });
+
+        return;
+      }
+
+      setShareOpen(true);
+      toast.info("Choose a social platform to share this photo.");
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.error("Gallery native sharing failed:", error);
+        toast.error("Sharing failed. Please choose a social platform.");
+      }
+    } finally {
+      setSharingImage(false);
+    }
+  }, [getShareDetails, shareTarget]);
+
+  useEffect(() => {
+    if (galleryLoading || items.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const sharedGalleryId = params.get("gallery");
+
+    if (!sharedGalleryId) return;
+
+    const sharedIndex = filtered.findIndex(
+      (item) => String(item.id) === String(sharedGalleryId),
+    );
+
+    const itemIndex =
+      sharedIndex >= 0
+        ? sharedIndex
+        : items.findIndex(
+            (item) => String(item.id) === String(sharedGalleryId),
+          );
+
+    if (itemIndex < 0) return;
+
+    if (sharedIndex < 0) {
+      setActiveCat("All");
+    }
+
+    const resolvedIndex =
+      sharedIndex >= 0
+        ? sharedIndex
+        : items.findIndex(
+            (item) => String(item.id) === String(sharedGalleryId),
+          );
+
+    setVisibleCount((previous) =>
+      Math.max(previous, resolvedIndex + 1),
+    );
+    setActiveIndex(resolvedIndex);
+
+    window.setTimeout(() => {
+      document
+        .getElementById("gallery")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  }, [filtered, galleryLoading, items]);
 
   useEffect(() => {
     if (activeIndex === null) return;
@@ -613,7 +841,7 @@ const GallerySection = ({ title, subtitle }) => {
   const accentHover = "#FFA500";
 
   return (
-    <section id="gallery" className="bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16">
+    <section id="gallery" className="scroll-mt-24 bg-white py-16 md:py-20 px-4 md:px-8 lg:px-16">
       <div className="max-w-6xl mx-auto">
         <motion.div
           variants={container}
@@ -738,7 +966,7 @@ const GallerySection = ({ title, subtitle }) => {
             <motion.article
               key={img.id || `${img.src}-${idx}`}
               variants={itemVar}
-              className="group overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-xl transition-shadow duration-500 flex flex-col"
+              className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-xl transition-shadow duration-500 flex flex-col"
             >
               <button
                 type="button"
@@ -759,6 +987,17 @@ const GallerySection = ({ title, subtitle }) => {
                       "linear-gradient(to bottom right, rgba(242,154,0,0.07), rgba(0,0,0,0) 30%, rgba(90,0,90,0.08))",
                   }}
                 />
+              </button>
+
+              <button
+                type="button"
+                onClick={(event) => openShare(img, event)}
+                className="absolute top-3 right-3 z-10 inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/95 hover:bg-white shadow-lg border border-white/70 transition"
+                aria-label={`Share ${img.alt || img.title || "gallery photo"}`}
+                title="Share photo"
+                style={{ color: primaryColor }}
+              >
+                <BsShare className="text-base" />
               </button>
 
               <div className="p-3 sm:p-4 flex-1 flex flex-col">
@@ -1234,6 +1473,159 @@ const GallerySection = ({ title, subtitle }) => {
       </AnimatePresence>
 
       <AnimatePresence>
+        {shareOpen && shareTarget && (
+          <motion.div
+            className="fixed inset-0 z-[1400] flex items-center justify-center p-4 bg-black/70"
+            variants={modalBackdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeShare();
+            }}
+          >
+            <motion.div
+              variants={modalPanel}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+              className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+                    Share Gallery Photo
+                  </p>
+                  <p
+                    className="text-base font-extrabold truncate"
+                    style={{ color: primaryColor }}
+                  >
+                    {shareTarget.alt ||
+                      shareTarget.title ||
+                      "SHEVET-CITY photo"}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeShare}
+                  disabled={sharingImage}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700 disabled:opacity-50"
+                  aria-label="Close share options"
+                >
+                  <BsX className="text-2xl" />
+                </button>
+              </div>
+
+              <div className="p-5">
+                <div className="rounded-2xl overflow-hidden border border-slate-100 bg-slate-50">
+                  <img
+                    src={
+                      shareTarget.src ||
+                      shareTarget.imageUrl ||
+                      shareTarget.mediaUrl
+                    }
+                    alt={
+                      shareTarget.alt ||
+                      shareTarget.title ||
+                      "SHEVET-CITY photo"
+                    }
+                    className="w-full h-52 object-cover"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={shareToAvailableApps}
+                  disabled={sharingImage}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white transition disabled:opacity-60"
+                  style={{ background: primaryColor }}
+                >
+                  <BsShare />
+                  {sharingImage
+                    ? "Preparing image..."
+                    : "Share to available apps"}
+                </button>
+
+                <p className="mt-3 text-xs text-slate-500 text-center">
+                  On supported devices, the actual photo will be attached.
+                  Other options share the gallery link.
+                </p>
+
+                <div className="mt-5 grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("whatsapp")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsWhatsapp className="text-2xl text-green-600" />
+                    <span className="text-[11px] font-semibold">WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("facebook")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsFacebook className="text-2xl text-blue-600" />
+                    <span className="text-[11px] font-semibold">Facebook</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("x")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsTwitterX className="text-2xl text-slate-900" />
+                    <span className="text-[11px] font-semibold">X</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("linkedin")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsLinkedin className="text-2xl text-blue-700" />
+                    <span className="text-[11px] font-semibold">LinkedIn</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("telegram")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsTelegram className="text-2xl text-sky-500" />
+                    <span className="text-[11px] font-semibold">Telegram</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => shareToPlatform("email")}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsEnvelope className="text-2xl text-slate-700" />
+                    <span className="text-[11px] font-semibold">Email</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={copyShareLink}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 p-3 hover:bg-slate-50"
+                  >
+                    <BsLink45Deg
+                      className="text-2xl"
+                      style={{ color: primaryColor }}
+                    />
+                    <span className="text-[11px] font-semibold">Copy link</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {activeItem && (
           <motion.div
             className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70"
@@ -1266,14 +1658,27 @@ const GallerySection = ({ title, subtitle }) => {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
-                  aria-label="Close"
-                >
-                  <BsX className="text-2xl" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => openShare(activeItem, event)}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100"
+                    aria-label="Share photo"
+                    title="Share photo"
+                    style={{ color: primaryColor }}
+                  >
+                    <BsShare className="text-lg" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+                    aria-label="Close"
+                  >
+                    <BsX className="text-2xl" />
+                  </button>
+                </div>
               </div>
 
               <div className="relative bg-black">

@@ -1,8 +1,7 @@
 // src/components/Hero.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo,  useCallback, useRef, useState } from "react";
 import { BsList, BsX } from "react-icons/bs";
 import { AiFillEye, AiFillEyeInvisible } from "react-icons/ai";
-import { Link as ScrollLink } from "react-scroll";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import { toast, ToastContainer } from "react-toastify";
@@ -190,6 +189,76 @@ const Hero = () => {
   const newsError = null;
 
   const closeMobile = () => setMobileOpen(false);
+
+  /**
+   * Scroll to a page section without depending on react-scroll.
+   *
+   * This fixes nested menu items such as Publications > News > Headlines,
+   * because the dropdown is closed first and the target position is then
+   * calculated against the actual sticky header height.
+   */
+  const navigateToSection = useCallback(
+    (sectionId, { closeDesktopMenus = true, closeMobileMenu = false } = {}) => {
+      if (!sectionId) return;
+
+      if (closeDesktopMenus) {
+        setOpenDropdown(null);
+        setOpenSubDropdown(null);
+        setPinnedDropdown(null);
+      }
+
+      if (closeMobileMenu) {
+        setMobileOpen(false);
+      }
+
+      const performScroll = (attempt = 0) => {
+        const target = document.getElementById(sectionId);
+
+        if (!target) {
+          if (attempt < 8) {
+            window.setTimeout(() => performScroll(attempt + 1), 80);
+          } else {
+            console.warn(`Section with id "${sectionId}" was not found.`);
+          }
+          return;
+        }
+
+        const navigation = document.querySelector(
+          '[data-shevet-navigation="true"]',
+        );
+
+        const navigationHeight =
+          navigation?.getBoundingClientRect?.().height || 120;
+
+        const targetTop =
+          target.getBoundingClientRect().top +
+          window.scrollY -
+          navigationHeight -
+          8;
+
+        window.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: "smooth",
+        });
+
+        const nextHash = `#${sectionId}`;
+
+        if (window.location.hash !== nextHash) {
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${window.location.pathname}${window.location.search}${nextHash}`,
+          );
+        }
+      };
+
+      // Let dropdown/mobile-menu layout changes finish before measuring.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => performScroll());
+      });
+    },
+    [],
+  );
 
   const openSignIn = () => {
     setShowSignInModal(true);
@@ -524,6 +593,7 @@ const Hero = () => {
       <div className={isSticky ? "h-[118px] md:h-[110px]" : "h-0"} />
 
       <div
+        data-shevet-navigation="true"
         className={[
           "w-full z-50",
           isSticky ? "fixed top-0 left-0 right-0" : "relative",
@@ -601,17 +671,14 @@ const Hero = () => {
 
                 if (!hasChildren) {
                   return (
-                    <ScrollLink
+                    <button
                       key={item.label}
-                      to={item.to}
-                      spy={true}
-                      smooth={true}
-                      offset={-120}
-                      duration={500}
+                      type="button"
+                      onClick={() => navigateToSection(item.to)}
                       className="cursor-pointer hover:text-[#F29A00]"
                     >
                       {item.label}
-                    </ScrollLink>
+                    </button>
                   );
                 }
 
@@ -671,21 +738,13 @@ const Hero = () => {
                           if (!childHasChildren) {
                             return (
                               <li key={child.label}>
-                                <ScrollLink
-                                  to={child.to}
-                                  spy={true}
-                                  smooth={true}
-                                  offset={-120}
-                                  duration={500}
-                                  className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
-                                  onClick={() => {
-                                    setOpenDropdown(null);
-                                    setOpenSubDropdown(null);
-                                    setPinnedDropdown(null);
-                                  }}
+                                <button
+                                  type="button"
+                                  onClick={() => navigateToSection(child.to)}
+                                  className="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
                                 >
                                   {child.label}
-                                </ScrollLink>
+                                </button>
                               </li>
                             );
                           }
@@ -743,21 +802,15 @@ const Hero = () => {
                                 <ul className="flex flex-col">
                                   {child.children.map((grandchild) => (
                                     <li key={grandchild.label}>
-                                      <ScrollLink
-                                        to={grandchild.to}
-                                        spy={true}
-                                        smooth={true}
-                                        offset={-120}
-                                        duration={500}
-                                        className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
-                                        onClick={() => {
-                                          setOpenDropdown(null);
-                                          setOpenSubDropdown(null);
-                                          setPinnedDropdown(null);
-                                        }}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          navigateToSection(grandchild.to)
+                                        }
+                                        className="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-[#F3E6F3] hover:text-[#5A005A] cursor-pointer"
                                       >
                                         {grandchild.label}
-                                      </ScrollLink>
+                                      </button>
                                     </li>
                                   ))}
                                 </ul>
@@ -791,18 +844,18 @@ const Hero = () => {
 
                   if (!hasChildren) {
                     return (
-                      <ScrollLink
+                      <button
                         key={item.label}
-                        to={item.to}
-                        spy={true}
-                        smooth={true}
-                        offset={-120}
-                        duration={500}
-                        onClick={closeMobile}
-                        className="py-2 border-b border-gray-100 cursor-pointer hover:text-[#F29A00]"
+                        type="button"
+                        onClick={() =>
+                          navigateToSection(item.to, {
+                            closeMobileMenu: true,
+                          })
+                        }
+                        className="py-2 text-left border-b border-gray-100 cursor-pointer hover:text-[#F29A00]"
                       >
                         {item.label}
-                      </ScrollLink>
+                      </button>
                     );
                   }
 
@@ -846,18 +899,18 @@ const Hero = () => {
 
                             if (!childHasChildren) {
                               return (
-                                <ScrollLink
+                                <button
                                   key={child.label}
-                                  to={child.to}
-                                  spy={true}
-                                  smooth={true}
-                                  offset={-120}
-                                  duration={500}
-                                  onClick={closeMobile}
-                                  className="block py-2 text-sm text-slate-700 hover:text-[#5A005A] cursor-pointer"
+                                  type="button"
+                                  onClick={() =>
+                                    navigateToSection(child.to, {
+                                      closeMobileMenu: true,
+                                    })
+                                  }
+                                  className="block w-full py-2 text-left text-sm text-slate-700 hover:text-[#5A005A] cursor-pointer"
                                 >
                                   {child.label}
-                                </ScrollLink>
+                                </button>
                               );
                             }
 
@@ -894,18 +947,18 @@ const Hero = () => {
                                 {mobileExpanded[submenuKey] && (
                                   <div className="pl-4 pb-1 border-l-2 border-[#F3E6F3]">
                                     {child.children.map((grandchild) => (
-                                      <ScrollLink
+                                      <button
                                         key={grandchild.label}
-                                        to={grandchild.to}
-                                        spy={true}
-                                        smooth={true}
-                                        offset={-120}
-                                        duration={500}
-                                        onClick={closeMobile}
-                                        className="block py-2 text-sm font-medium text-slate-600 hover:text-[#5A005A] cursor-pointer"
+                                        type="button"
+                                        onClick={() =>
+                                          navigateToSection(grandchild.to, {
+                                            closeMobileMenu: true,
+                                          })
+                                        }
+                                        className="block w-full py-2 text-left text-sm font-medium text-slate-600 hover:text-[#5A005A] cursor-pointer"
                                       >
                                         {grandchild.label}
-                                      </ScrollLink>
+                                      </button>
                                     ))}
                                   </div>
                                 )}

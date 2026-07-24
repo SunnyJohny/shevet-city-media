@@ -1,3 +1,5 @@
+
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -7,6 +9,14 @@ import {
   BsNewspaper,
   BsPencilSquare,
   BsPlusCircle,
+  BsShareFill,
+  BsFacebook,
+  BsTwitter,
+  BsWhatsapp,
+  BsLinkedin,
+  BsTelegram,
+  BsEnvelope,
+  BsLink45Deg,
   BsTrash,
   BsX,
 } from "react-icons/bs";
@@ -29,6 +39,54 @@ import { useMyContext } from "../Context/MyContext";
 const SHEVET_CITY_ID = "the-shevet-city";
 const INITIAL_VISIBLE_COUNT = 6;
 const LOAD_MORE_COUNT = 6;
+
+
+const SITE_NAME = "SHEVET-CITY Media";
+
+const getNewsShareUrl = (item) => {
+  if (typeof window === "undefined") return "";
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("news", item?.id || "");
+  url.hash = "news";
+  return url.toString();
+};
+
+const getShareText = (item) => {
+  const title = item?.title || "SHEVET-CITY News";
+  const highlight = item?.highlight || item?.content || "";
+  const shortenedHighlight =
+    highlight.length > 180 ? `${highlight.slice(0, 177)}...` : highlight;
+
+  return [title, shortenedHighlight].filter(Boolean).join("\n\n");
+};
+
+const getImageFileForSharing = async (imageUrl, title) => {
+  if (!imageUrl || typeof fetch === "undefined") return null;
+
+  try {
+    const response = await fetch(imageUrl, { mode: "cors" });
+    if (!response.ok) return null;
+
+    const blob = await response.blob();
+    if (!blob.type?.startsWith("image/")) return null;
+
+    const extension = blob.type.split("/")[1]?.split("+")[0] || "jpg";
+    const safeName = String(title || "shevet-city-news")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+
+    return new File([blob], `${safeName || "shevet-city-news"}.${extension}`, {
+      type: blob.type,
+    });
+  } catch (error) {
+    console.warn("Could not prepare the news image for sharing:", error);
+    return null;
+  }
+};
 
 const container = {
   hidden: { opacity: 0, y: 22 },
@@ -210,6 +268,7 @@ const NewsCard = ({
   onEdit,
   onDelete,
   onView,
+  onShare,
 }) => {
   const imageUrl = item.imageUrl || item.mediaUrl || "";
 
@@ -264,6 +323,17 @@ const NewsCard = ({
           )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-60" />
+
+          <button
+            type="button"
+            onClick={(event) => stopAction(event, () => onShare(item))}
+            className="absolute top-3 right-3 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/95 shadow-md hover:scale-105 transition"
+            style={{ color: primaryColor }}
+            aria-label={`Share ${item.title || "news article"}`}
+            title="Share news"
+          >
+            <BsShareFill className="text-sm" />
+          </button>
         </div>
       </div>
 
@@ -584,7 +654,7 @@ const NewsForm = ({
   );
 };
 
-const NewsArticleModal = ({ item, onClose }) => {
+const NewsArticleModal = ({ item, onClose, onShare }) => {
   if (!item) return null;
 
   const imageUrl = item.imageUrl || item.mediaUrl || "";
@@ -621,14 +691,28 @@ const NewsArticleModal = ({ item, onClose }) => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
-            aria-label="Close"
-          >
-            <BsX className="text-2xl" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onShare(item)}
+              className="inline-flex items-center justify-center gap-2 px-3 h-9 rounded-full hover:bg-slate-100 font-semibold text-xs"
+              style={{ color: primaryColor }}
+              aria-label={`Share ${item.title || "news article"}`}
+              title="Share news"
+            >
+              <BsShareFill />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+              aria-label="Close"
+            >
+              <BsX className="text-2xl" />
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-0 md:grid-cols-5">
@@ -718,6 +802,259 @@ const NewsArticleModal = ({ item, onClose }) => {
   );
 };
 
+
+const ShareNewsModal = ({ item, onClose }) => {
+  const [sharingImage, setSharingImage] = useState(false);
+
+  if (!item) return null;
+
+  const imageUrl = item.imageUrl || item.mediaUrl || "";
+  const shareUrl = getNewsShareUrl(item);
+  const shareText = getShareText(item);
+  const encodedUrl = encodeURIComponent(shareUrl);
+  const encodedText = encodeURIComponent(shareText);
+  const encodedTitle = encodeURIComponent(item.title || "SHEVET-CITY News");
+
+  const openShareWindow = (url) => {
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer,width=760,height=680",
+    );
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("News link copied.");
+    } catch {
+      toast.error("Could not copy the link.");
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) {
+      toast.info("Use one of the social media buttons below.");
+      return;
+    }
+
+    try {
+      setSharingImage(true);
+
+      const imageFile = await getImageFileForSharing(
+        imageUrl,
+        item.title,
+      );
+
+      const shareData = {
+        title: item.title || "SHEVET-CITY News",
+        text: shareText,
+        url: shareUrl,
+      };
+
+      if (
+        imageFile &&
+        navigator.canShare?.({ files: [imageFile] })
+      ) {
+        shareData.files = [imageFile];
+      }
+
+      await navigator.share(shareData);
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.error("Native news sharing failed:", error);
+        toast.error("Sharing failed. Please use a social button below.");
+      }
+    } finally {
+      setSharingImage(false);
+    }
+  };
+
+  const socialOptions = [
+    {
+      name: "WhatsApp",
+      icon: BsWhatsapp,
+      action: () =>
+        openShareWindow(
+          `https://wa.me/?text=${encodeURIComponent(
+            `${shareText}\n\n${shareUrl}`,
+          )}`,
+        ),
+    },
+    {
+      name: "Facebook",
+      icon: BsFacebook,
+      action: () =>
+        openShareWindow(
+          `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+        ),
+    },
+    {
+      name: "X",
+      icon: BsTwitter,
+      action: () =>
+        openShareWindow(
+          `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+        ),
+    },
+    {
+      name: "LinkedIn",
+      icon: BsLinkedin,
+      action: () =>
+        openShareWindow(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+        ),
+    },
+    {
+      name: "Telegram",
+      icon: BsTelegram,
+      action: () =>
+        openShareWindow(
+          `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+        ),
+    },
+    {
+      name: "Email",
+      icon: BsEnvelope,
+      action: () => {
+        window.location.href =
+          `mailto:?subject=${encodedTitle}&body=${encodeURIComponent(
+            `${shareText}\n\nRead more: ${shareUrl}`,
+          )}`;
+      },
+    },
+  ];
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/70"
+      variants={modalBackdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <motion.div
+        variants={modalPanel}
+        initial="hidden"
+        animate="show"
+        exit="exit"
+        className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+              Share News
+            </p>
+            <p
+              className="text-base font-extrabold line-clamp-1"
+              style={{ color: primaryColor }}
+            >
+              {item.title || "SHEVET-CITY News"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-100 text-slate-700"
+            aria-label="Close sharing options"
+          >
+            <BsX className="text-2xl" />
+          </button>
+        </div>
+
+        <div className="p-5">
+          <div className="flex gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={item.title || "News"}
+                className="w-24 h-24 rounded-xl object-cover shrink-0"
+              />
+            ) : (
+              <div
+                className="w-24 h-24 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: pillLightBg }}
+              >
+                <BsNewspaper
+                  className="text-3xl"
+                  style={{ color: primaryColor }}
+                />
+              </div>
+            )}
+
+            <div className="min-w-0">
+              <p
+                className="font-extrabold text-sm line-clamp-2"
+                style={{ color: primaryColor }}
+              >
+                {item.title || "News Update"}
+              </p>
+              <p className="mt-1 text-xs text-slate-600 line-clamp-3">
+                {item.highlight ||
+                  item.content ||
+                  "Latest news from SHEVET-CITY Media."}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleNativeShare}
+            disabled={sharingImage}
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl font-extrabold text-white disabled:opacity-60"
+            style={{ background: primaryColor }}
+          >
+            <BsShareFill />
+            {sharingImage
+              ? "Preparing image..."
+              : "Share to any available app"}
+          </button>
+
+          <p className="mt-4 text-xs font-semibold text-slate-500">
+            Or choose a platform
+          </p>
+
+          <div className="mt-3 grid grid-cols-3 gap-3">
+            {socialOptions.map(({ name, icon: Icon, action }) => (
+              <button
+                key={name}
+                type="button"
+                onClick={action}
+                className="inline-flex flex-col items-center justify-center gap-2 min-h-20 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:shadow-sm transition text-xs font-semibold"
+                style={{ color: primaryColor }}
+              >
+                <Icon className="text-xl" />
+                {name}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={copyShareLink}
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 font-semibold hover:bg-slate-50"
+            style={{ color: primaryColor }}
+          >
+            <BsLink45Deg className="text-lg" />
+            Copy news link
+          </button>
+
+          <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+            On supported phones and browsers, “Share to any available app”
+            includes the news picture as an image file. Social websites use the
+            shared article link and may generate their preview from your
+            website metadata.
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const NewsSection = ({
   title = "Latest from SHEVET-CITY Media",
   subtitle = "Stay informed about updates, releases and events from SHEVET-CITY Media.",
@@ -750,6 +1087,7 @@ const NewsSection = ({
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedNews, setSelectedNews] = useState(null);
+  const [shareTarget, setShareTarget] = useState(null);
 
   const newsCollectionRef = useMemo(() => {
     return collection(db, "shevetCity", SHEVET_CITY_ID, "news");
@@ -806,6 +1144,24 @@ const NewsSection = ({
           currentUser || item.status === "published",
       );
   }, [sourceNews, currentUser]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || newsItems.length === 0) return;
+
+    const requestedNewsId = new URLSearchParams(
+      window.location.search,
+    ).get("news");
+
+    if (!requestedNewsId) return;
+
+    const requestedItem = newsItems.find(
+      (item) => String(item.id) === String(requestedNewsId),
+    );
+
+    if (requestedItem) {
+      setSelectedNews(requestedItem);
+    }
+  }, [newsItems]);
 
   const categories = useMemo(() => {
     return getUniqueCategories(newsItems);
@@ -1436,6 +1792,7 @@ const NewsSection = ({
                   onEdit={openEdit}
                   onDelete={openDelete}
                   onView={setSelectedNews}
+                  onShare={setShareTarget}
                 />
               ))}
             </motion.div>
@@ -1513,6 +1870,16 @@ const NewsSection = ({
           <NewsArticleModal
             item={selectedNews}
             onClose={() => setSelectedNews(null)}
+            onShare={setShareTarget}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {shareTarget && (
+          <ShareNewsModal
+            item={shareTarget}
+            onClose={() => setShareTarget(null)}
           />
         )}
       </AnimatePresence>
